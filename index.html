@@ -141,13 +141,13 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
       <div class="field"><label>Unidade</label>
         <select id="e-unidade"><option value="">—</option><option>g</option><option>kg</option><option>ml</option><option>L</option><option>un</option><option>pç</option><option>cx</option><option>pct</option></select>
       </div>
-      <div class="field"><label>Preço R$</label><input id="e-preco" placeholder="0,00" inputmode="decimal"></div>
+      <div class="field"><label>Preço R$</label><input id="e-preco" data-cents="0" placeholder="0,00" inputmode="numeric" onkeydown="priceKey(event,this)" style="caret-color:transparent;cursor:default"></div>
     </div>
     <div class="field">
       <label>Quantidade</label>
       <div class="qty-ctrl">
         <button onclick="chgQtd('e-qtd',-1)">−</button>
-        <input id="e-qtd" type="number" value="1" min="0.1" step="0.1">
+        <input id="e-qtd" type="text" inputmode="decimal" value="1">
         <button onclick="chgQtd('e-qtd',1)">+</button>
       </div>
     </div>
@@ -169,13 +169,13 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
       <div class="field"><label>Unidade</label>
         <select id="c-unidade"><option value="">—</option><option>g</option><option>kg</option><option>ml</option><option>L</option><option>un</option><option>pç</option><option>cx</option><option>pct</option></select>
       </div>
-      <div class="field"><label>Preço R$</label><input id="c-preco" placeholder="0,00" inputmode="decimal"></div>
+      <div class="field"><label>Preço R$</label><input id="c-preco" data-cents="0" placeholder="0,00" inputmode="numeric" onkeydown="priceKey(event,this)" style="caret-color:transparent;cursor:default"></div>
     </div>
     <div class="field">
       <label>Quantidade</label>
       <div class="qty-ctrl">
         <button onclick="chgQtd('c-qtd',-1)">−</button>
-        <input id="c-qtd" type="number" value="1" min="0.1" step="0.1">
+        <input id="c-qtd" type="text" inputmode="decimal" value="1">
         <button onclick="chgQtd('c-qtd',1)">+</button>
       </div>
     </div>
@@ -218,7 +218,7 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
       <div style="flex:1">
         <div class="card-title">Produto A</div>
         <div class="field"><input id="a-nome" placeholder="Nome (opc.)"></div>
-        <div class="field"><input id="a-preco" placeholder="Preço R$" inputmode="decimal"></div>
+        <div class="field"><input id="a-preco" data-cents="0" placeholder="0,00" inputmode="numeric" onkeydown="priceKey(event,this)" style="caret-color:transparent;cursor:default"></div>
         <div class="g2">
           <div class="field"><input id="a-qtd" placeholder="Qtd" inputmode="decimal"></div>
           <div class="field"><select id="a-un"><option>g</option><option>kg</option><option>ml</option><option>L</option><option>un</option></select></div>
@@ -228,7 +228,7 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
       <div style="flex:1">
         <div class="card-title">Produto B</div>
         <div class="field"><input id="b-nome" placeholder="Nome (opc.)"></div>
-        <div class="field"><input id="b-preco" placeholder="Preço R$" inputmode="decimal"></div>
+        <div class="field"><input id="b-preco" data-cents="0" placeholder="0,00" inputmode="numeric" onkeydown="priceKey(event,this)" style="caret-color:transparent;cursor:default"></div>
         <div class="g2">
           <div class="field"><input id="b-qtd" placeholder="Qtd" inputmode="decimal"></div>
           <div class="field"><select id="b-un"><option>g</option><option>kg</option><option>ml</option><option>L</option><option>un</option></select></div>
@@ -544,7 +544,7 @@ function addItem(pre=null) {
   const preco = parseBRL(pre?.preco||document.getElementById('c-preco').value);
   const qtd = parseFloat(pre?.qtd||document.getElementById('c-qtd').value)||1;
   cart.push({id:++cartCtr,nome,marca,tamanho,unidade,preco,qtd,subtotal:preco*qtd});
-  if(!pre){['c-nome','c-marca','c-tamanho','c-preco'].forEach(id=>document.getElementById(id).value='');document.getElementById('c-qtd').value='1';document.getElementById('c-unidade').value='';}
+  if(!pre){['c-nome','c-marca','c-tamanho'].forEach(id=>document.getElementById(id).value='');clearPrice('c-preco');document.getElementById('c-qtd').value='1';document.getElementById('c-unidade').value='';}
   document.getElementById('tip-box').style.display='none';
   updateTotal();
   trackFrequencia(nome);
@@ -721,8 +721,8 @@ function limparCart(){
 
 // ── COMPARAR ─────────────────────────────────────────────────────────
 async function comparar() {
-  const pa=parseBRL(document.getElementById('a-preco').value),qa=parseBRL(document.getElementById('a-qtd').value);
-  const pb=parseBRL(document.getElementById('b-preco').value),qb=parseBRL(document.getElementById('b-qtd').value);
+  const pa=getPriceVal('a-preco'),qa=parseFloat((document.getElementById('a-qtd').value||'0').replace(',','.'))||0;
+  const pb=getPriceVal('b-preco'),qb=parseFloat((document.getElementById('b-qtd').value||'0').replace(',','.'))||0;
   const aun=document.getElementById('a-un').value,bun=document.getElementById('b-un').value;
   const an=document.getElementById('a-nome').value||'Produto A',bn=document.getElementById('b-nome').value||'Produto B';
   if(!pa||!qa||!pb||!qb){alert('Preencha preço e quantidade dos dois produtos.');return;}
@@ -1055,6 +1055,44 @@ async function verCompra(id) {
 }
 
 // ── BOOT ─────────────────────────────────────────────────────────────
+
+// ── PRICE FIELD UTILITIES ─────────────────────────────────────────────
+function fmtCents(c){const s=String(c).padStart(3,'0');const i=s.slice(0,-2).replace(/^0+/,'')||'0';return i+','+s.slice(-2);}
+function priceKey(e,el){
+  const k=e.key;let c=parseInt(el.getAttribute('data-cents')||'0');
+  if(k>='0'&&k<='9'){c=Math.min(c*10+parseInt(k),9999999);e.preventDefault();}
+  else if(k==='Backspace'){c=Math.floor(c/10);e.preventDefault();}
+  else if(k==='Delete'){c=0;e.preventDefault();}
+  else if(!['Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(k)){e.preventDefault();return;}
+  el.setAttribute('data-cents',c);el.value=fmtCents(c);
+}
+function setPriceVal(id,v){const el=document.getElementById(id);const c=Math.round(parseFloat(v||0)*100);el.setAttribute('data-cents',c);el.value=fmtCents(c);}
+function getPriceVal(id){return parseInt(document.getElementById(id).getAttribute('data-cents')||'0')/100;}
+function clearPrice(id){setPriceVal(id,0);}
+
+// ── OPINION SEARCH ────────────────────────────────────────────────────
+async function buscarOpiniao(){
+  const nome=document.getElementById('c-nome').value.trim();
+  if(!nome){alert('Informe o nome do produto primeiro.');return;}
+  const btn=document.getElementById('opiniao-btn');
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i>Buscando...';
+  document.getElementById('opiniao-box').style.display='none';
+  try{
+    const r=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      model:'claude-sonnet-4-6',max_tokens:600,
+      tools:[{type:'web_search_20250305',name:'web_search'}],
+      messages:[{role:'user',content:'Pesquise opiniões sobre o produto "'+nome+'". Responda em português com: qualidade geral (nota /10), principais prós, principais contras, e conclusão se vale comprar. Seja objetivo e direto, máximo 8 linhas.'}]
+    })});
+    if(!r.ok){const e=await r.json();throw new Error(e.error?.message||'Erro '+r.status);}
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message);
+    const text=d.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'Sem resultado.';
+    document.getElementById('opiniao-box').innerHTML='🔍 '+text;
+    document.getElementById('opiniao-box').style.display='block';
+  }catch(e){alert('Erro ao buscar opiniões: '+e.message);}
+  btn.disabled=false;btn.innerHTML='<i class="ti ti-world-search"></i>Buscar opiniões na web';
+}
+
 init();
 </script>
 </body>
