@@ -315,6 +315,7 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
       </div>
       <div id="ac-box" class="ac-box"></div>
       <div class="btn-row" style="margin-top:10px">
+        <button class="btn btn-s btn-sm" style="flex:1" onclick="loadHoje().then(()=>{renderHoje();renderQueue();})"><i class="ti ti-refresh"></i>Recarregar</button>
         <button class="btn btn-s btn-sm" style="flex:1" onclick="limparFeitos()"><i class="ti ti-check"></i>Limpar comprados</button>
         <button class="btn btn-s btn-sm" style="flex:1;color:#ff3b30" onclick="limparTodosHoje()"><i class="ti ti-trash"></i>Limpar tudo</button>
       </div>
@@ -400,8 +401,9 @@ const SH = { 'Content-Type':'application/json', 'apikey':SK, 'Authorization':`Be
 async function dbGet(t, qs='') {
   try {
     const r = await fetch(`${SB}/rest/v1/${t}?${qs}`, { headers: SH });
-    return r.ok ? await r.json() : [];
-  } catch { return []; }
+    if (!r.ok) { const e = await r.text(); console.error('dbGet error', t, r.status, e); return []; }
+    return await r.json();
+  } catch(e) { console.error('dbGet catch', t, e); return []; }
 }
 async function dbPost(t, data) {
   try {
@@ -522,8 +524,9 @@ async function loadLista() {
   lista = Array.isArray(r) ? r : [];
 }
 async function loadHoje() {
-  if(!currentUser)return;
-  const r = await dbGet('lista_hoje','select=*,lista_permanente(nome,marca,tamanho,unidade)&done=eq.false&order=created_at.asc&user_id=eq.'+encodeURIComponent(currentUser.id));
+  if (!currentUser) return;
+  // Query simples sem JOIN para evitar falha com lista_id NULL
+  const r = await dbGet('lista_hoje', 'select=*&done=eq.false&order=created_at.asc&user_id=eq.' + encodeURIComponent(currentUser.id));
   hojeList = Array.isArray(r) ? r : [];
 }
 
