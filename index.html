@@ -1140,25 +1140,19 @@ async function verCompra(id) {
 async function fazerLogin() {
   const nomeRaw = document.getElementById('login-nome').value.trim();
   if (!nomeRaw) { alert('Digite seu nome para entrar.'); return; }
-  
-  // Normaliza: primeira letra maiúscula, resto minúsculo, sem espaços extras
-  const nomeDisplay = nomeRaw.replace(/\s+/g,' ').split(' ').map(p=>p.charAt(0).toUpperCase()+p.slice(1).toLowerCase()).join(' ');
-  const nomeKey = nomeDisplay.toLowerCase(); // chave para busca case-insensitive
-  
-  // Check if user exists, create if not
-  const existing = await dbGet('usuarios', 'nome_key=eq.'+encodeURIComponent(nomeKey)+'&select=*');
-  let user;
-  if (existing && existing.length > 0) {
-    user = existing[0];
-  } else {
-    user = await dbPost('usuarios', { nome: nomeDisplay, nome_key: nomeKey });
-  }
-  
-  if (!user) {
-    // Fallback: use nome as ID if Supabase fails
-    user = { id: nomeKey.replace(/\s+/g,'-'), nome: nomeDisplay, nome_key: nomeKey };
-  }
-  
+
+  // Normaliza nome
+  const nomeDisplay = nomeRaw.replace(/\s+/g,' ').split(' ')
+    .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+  // ID: nome completo em minúsculo, espaços preservados (ex: "pedro lopes")
+  const nomeKey = nomeDisplay.toLowerCase().trim();
+
+  // Usa nomeKey como ID estável — não depende de UUID do Supabase
+  const user = { id: nomeKey, nome: nomeDisplay };
+
+  // Registra na tabela usuarios em segundo plano (não crítico)
+  dbPost('usuarios', { nome: nomeDisplay, nome_key: nomeKey }).catch(() => {});
+
   currentUser = user;
   localStorage.setItem('solo-user', JSON.stringify(user));
   document.getElementById('login-screen').style.display = 'none';
