@@ -1091,21 +1091,25 @@ async function verCompra(id) {
 
 // ── LOGIN ─────────────────────────────────────────────────────────────
 async function fazerLogin() {
-  const nome = document.getElementById('login-nome').value.trim();
-  if (!nome) { alert('Digite seu nome para entrar.'); return; }
+  const nomeRaw = document.getElementById('login-nome').value.trim();
+  if (!nomeRaw) { alert('Digite seu nome para entrar.'); return; }
+  
+  // Normaliza: primeira letra maiúscula, resto minúsculo, sem espaços extras
+  const nomeDisplay = nomeRaw.replace(/\s+/g,' ').split(' ').map(p=>p.charAt(0).toUpperCase()+p.slice(1).toLowerCase()).join(' ');
+  const nomeKey = nomeDisplay.toLowerCase(); // chave para busca case-insensitive
   
   // Check if user exists, create if not
-  const existing = await dbGet('usuarios', 'nome=eq.'+encodeURIComponent(nome)+'&select=*');
+  const existing = await dbGet('usuarios', 'nome_key=eq.'+encodeURIComponent(nomeKey)+'&select=*');
   let user;
   if (existing && existing.length > 0) {
     user = existing[0];
   } else {
-    user = await dbPost('usuarios', { nome });
+    user = await dbPost('usuarios', { nome: nomeDisplay, nome_key: nomeKey });
   }
   
   if (!user) {
     // Fallback: use nome as ID if Supabase fails
-    user = { id: nome.toLowerCase().replace(/\s+/g,'-'), nome };
+    user = { id: nomeKey.replace(/\s+/g,'-'), nome: nomeDisplay, nome_key: nomeKey };
   }
   
   currentUser = user;
