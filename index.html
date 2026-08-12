@@ -315,8 +315,8 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
       </div>
       <div id="ac-box" class="ac-box"></div>
       <div class="btn-row" style="margin-top:10px">
-        <button class="btn btn-s btn-sm" style="flex:1" onclick="limparFeitos()"><i class="ti ti-check"></i>Limpar feitos</button>
-        <button class="btn btn-s btn-sm" style="flex:1" onclick="limparTodosHoje()"><i class="ti ti-trash"></i>Limpar tudo</button>
+        <button class="btn btn-s btn-sm" style="flex:1" onclick="limparFeitos()"><i class="ti ti-check"></i>Limpar comprados</button>
+        <button class="btn btn-s btn-sm" style="flex:1;color:#ff3b30" onclick="limparTodosHoje()"><i class="ti ti-trash"></i>Limpar tudo</button>
       </div>
     </div>
     <div id="hoje-list"></div>
@@ -718,26 +718,73 @@ async function getDica() {
   btn.disabled=false; btn.innerHTML='<i class="ti ti-bulb"></i>Dica';
 }
 
-async function finalizarCompra() {
-  if(!cart.length)return;
-  const btn=document.getElementById('fin-btn');
-  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>Salvando...';
-  const total=cart.reduce((s,i)=>s+i.subtotal,0);
-  const mercado=document.getElementById('c-mercado').value||'Supermercado';
-  const sessao=await dbPost('sessoes_compra',{mercado,data:new Date().toISOString().split('T')[0],total,user_id:currentUser?.id});
-  if(sessao){
-    for(const item of cart){
-      await dbPost('itens_compra',{sessao_id:sessao.id,nome:item.nome,marca:item.marca||'',tamanho:item.tamanho||'',unidade:item.unidade||'',preco:item.preco,qtd:item.qtd,subtotal:item.subtotal});
+function finalizarCompra() {
+  if (!cart.length) return;
+  // Abre modal de confirmação
+  const total = cart.reduce((s, i) => s + i.subtotal, 0);
+  document.getElementById('modal-total').textContent = fmtBRL(total);
+  document.getElementById('modal-itens').innerHTML = cart.map(item => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f2f2f7">
+      <input type="checkbox" id="nc-${item.id}" value="${item.id}"
+        style="width:20px;height:20px;accent-color:#FF3B30;cursor:pointer;flex-shrink:0">
+      <label for="nc-${item.id}" style="flex:1;cursor:pointer">
+        <div style="font-size:14px;font-weight:500">${item.nome}${item.marca ? ' · <span style="font-weight:400;color:#8e8e93">'+item.marca+'</span>' : ''}</div>
+        <div style="font-size:12px;color:#8e8e93">${fmtBRL(item.preco)} × ${fmtN(item.qtd)} = ${fmtBRL(item.subtotal)}</div>
+      </label>
+    </div>`).join('');
+  document.getElementById('modal-confirmacao').style.display = 'block';
+}
+
+function fecharModal() {
+  document.getElementById('modal-confirmacao').style.display = 'none';
+}
+
+async function confirmarCompra() {
+  // Itens marcados = NÃO comprados
+  const naoComprados = cart.filter(i => document.getElementById('nc-' + i.id)?.checked);
+  const comprados = cart.filter(i => !document.getElementById('nc-' + i.id)?.checked);
+
+  fecharModal();
+
+  if (!comprados.length) {
+    alert('Nenhum item foi confirmado como comprado.');
+    return;
+  }
+
+  const btn = document.getElementById('fin-btn');
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i>Salvando...';
+
+  const total = comprados.reduce((s, i) => s + i.subtotal, 0);
+  const mercado = document.getElementById('c-mercado').value || 'Supermercado';
+  const sessao = await dbPost('sessoes_compra', { mercado, data: new Date().toISOString().split('T')[0], total, user_id: currentUser?.id });
+
+  if (sessao) {
+    for (const item of comprados) {
+      await dbPost('itens_compra', { sessao_id: sessao.id, nome: item.nome, marca: item.marca || '', tamanho: item.tamanho || '', unidade: item.unidade || '', preco: item.preco, qtd: item.qtd, subtotal: item.subtotal });
     }
-    cart=[];
-    document.getElementById('c-mercado').value='';
-    document.getElementById('tip-box').style.display='none';
+
+    // Itens não comprados voltam para lista de hoje
+    for (const item of naoComprados) {
+      const tmpId = 'tmp-' + Date.now() + Math.random();
+      hojeList.push({ id: tmpId, nome: item.nome, detalhe: [item.marca, (item.tamanho || '') + (item.unidade || '')].filter(Boolean).join(' · '), done: false });
+      dbPost('lista_hoje', { nome: item.nome, detalhe: [item.marca, (item.tamanho || '') + (item.unidade || '')].filter(Boolean).join(' · '), done: false, user_id: currentUser?.id });
+    }
+
+    cart = [];
+    document.getElementById('c-mercado').value = '';
+    document.getElementById('tip-box').style.display = 'none';
     updateTotal();
-    alert(`✅ Compra salva! Total: ${fmtBRL(total)}`);
+    renderHoje(); renderQueue();
+
+    const msg = naoComprados.length > 0
+      ? `✅ Compra salva! Total: ${fmtBRL(total)}\n\n${naoComprados.length} item(ns) voltaram para sua lista de hoje.`
+      : `✅ Compra salva! Total: ${fmtBRL(total)}`;
+    alert(msg);
   } else {
     alert('❌ Erro ao salvar. Verifique o Supabase.');
   }
-  btn.disabled=false; btn.innerHTML='<i class="ti ti-device-floppy"></i>Salvar';
+
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i>Salvar';
 }
 
 function limparCart(){
@@ -1314,7 +1361,7 @@ Resposta em português brasileiro, curta e natural. Preço em reais com vírgula
         cart = []; updateTotal();
         break;
       case 'finalizar':
-        await finalizarCompra();
+        finalizarCompra();
         break;
     }
 
@@ -1329,5 +1376,25 @@ Resposta em português brasileiro, curta e natural. Preço em reais com vírgula
 
 checkAutoLogin();
 </script>
+<!-- MODAL CONFIRMAÇÃO DE COMPRA -->
+<div id="modal-confirmacao" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;padding:20px;overflow-y:auto">
+  <div style="background:#fff;border-radius:16px;max-width:480px;margin:0 auto;overflow:hidden">
+    <div style="padding:20px 20px 0">
+      <div style="font-size:17px;font-weight:700;margin-bottom:4px">Confirmar compra</div>
+      <div style="font-size:13px;color:#8e8e93;margin-bottom:16px">Marque os itens que <strong>não</strong> foram comprados</div>
+    </div>
+    <div id="modal-itens" style="padding:0 20px;max-height:50vh;overflow-y:auto"></div>
+    <div style="padding:16px 20px;border-top:1px solid #f2f2f7;margin-top:12px">
+      <div style="font-size:15px;font-weight:600;margin-bottom:14px">
+        Total: <span id="modal-total" style="color:#FB5C32"></span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="fecharModal()" style="flex:1;padding:12px;border:1px solid #e5e5ea;border-radius:10px;background:#f2f2f7;font-size:14px;font-weight:500;cursor:pointer">Cancelar</button>
+        <button onclick="confirmarCompra()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#FB5C32;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Confirmar compra</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
