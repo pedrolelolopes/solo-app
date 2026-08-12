@@ -1178,12 +1178,19 @@ async function checkAutoLogin() {
   const saved = localStorage.getItem('solo-user');
   if (saved) {
     try {
-      currentUser = JSON.parse(saved);
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('main-app').style.display = 'block';
-      document.getElementById('user-badge').textContent = '👤 ' + currentUser.nome;
-      await init();
-      return;
+      const stored = JSON.parse(saved);
+      if (stored.nome) {
+        // Sempre renormaliza o ID — corrige formatos antigos (pedro-lopes → pedro)
+        const nomeDisplay = stored.nome;
+        const nomeKey = nomeDisplay.toLowerCase().trim();
+        currentUser = { id: nomeKey, nome: nomeDisplay };
+        localStorage.setItem('solo-user', JSON.stringify(currentUser));
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('main-app').style.display = 'block';
+        document.getElementById('user-badge').textContent = '👤 ' + currentUser.nome;
+        await init();
+        return;
+      }
     } catch {}
   }
   document.getElementById('login-screen').style.display = 'flex';
