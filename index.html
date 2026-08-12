@@ -799,21 +799,27 @@ function updateAC() {
 async function selecionarAC(listaId) {
   const item=lista.find(i=>i.id===listaId); if(!item)return;
   const detalhe=[item.marca,(item.tamanho||'')+(item.unidade||''),item.obs].filter(Boolean).join(' · ');
-  const novo=await dbPost('lista_hoje',{nome:item.nome,detalhe,lista_id:listaId,done:false});
-  if(novo) hojeList.push({...novo,lista_permanente:item});
+  const tmpId='tmp-'+Date.now();
+  hojeList.push({id:tmpId,nome:item.nome,detalhe,lista_permanente:item,done:false});
   document.getElementById('hoje-input').value='';
   document.getElementById('ac-box').style.display='none';
   renderHoje(); renderQueue();
+  const novo=await dbPost('lista_hoje',{nome:item.nome,detalhe,lista_id:listaId,done:false});
+  if(novo){const idx=hojeList.findIndex(i=>i.id===tmpId);if(idx!==-1)hojeList[idx]={...novo,lista_permanente:item};}
 }
 async function addHoje() {
   const nome=document.getElementById('hoje-input').value.trim(); if(!nome)return;
   document.getElementById('ac-box').style.display='none';
   const jf=lista.find(i=>i.nome.toLowerCase()===nome.toLowerCase());
   if(jf){await selecionarAC(jf.id);return;}
-  const novo=await dbPost('lista_hoje',{nome,detalhe:'',done:false});
-  if(novo) hojeList.push(novo);
+  // Renderiza imediatamente (otimista)
+  const tmpId='tmp-'+Date.now();
+  hojeList.push({id:tmpId,nome,detalhe:'',done:false});
   document.getElementById('hoje-input').value='';
   renderHoje(); renderQueue();
+  // Sincroniza com Supabase em segundo plano
+  const novo=await dbPost('lista_hoje',{nome,detalhe:'',done:false});
+  if(novo){const idx=hojeList.findIndex(i=>i.id===tmpId);if(idx!==-1)hojeList[idx]=novo;}
   trackFreqHoje(nome);
 }
 async function trackFreqHoje(nome) {
@@ -836,19 +842,19 @@ async function trackFreqHoje(nome) {
 async function toggleHoje(id) {
   const item=hojeList.find(i=>i.id===id); if(!item)return;
   item.done=!item.done;
-  await dbPatch('lista_hoje',id,{done:item.done});
   renderHoje(); renderQueue();
+  if(!String(id).startsWith('tmp-'))await dbPatch('lista_hoje',id,{done:item.done});
 }
 async function rmHoje(id) {
-  await dbDel('lista_hoje',id);
   hojeList=hojeList.filter(i=>i.id!==id);
   renderHoje(); renderQueue();
+  if(!String(id).startsWith('tmp-'))await dbDel('lista_hoje',id);
 }
 async function limparFeitos() {
-  const f=hojeList.filter(i=>i.done);
-  for(const h of f)await dbDel('lista_hoje',h.id);
+  const feitos=hojeList.filter(i=>i.done);
   hojeList=hojeList.filter(i=>!i.done);
   renderHoje(); renderQueue();
+  for(const x of feitos)if(!String(x.id).startsWith('tmp-'))await dbDel('lista_hoje',x.id);
 }
 async function limparTodosHoje() {
   if(!confirm('Limpar toda a lista de hoje?'))return;
