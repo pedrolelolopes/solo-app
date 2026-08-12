@@ -84,7 +84,25 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 </style>
 </head>
 <body>
-<div class="app">
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f2f2f7;padding:24px">
+  <div style="width:100%;max-width:360px">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:48px;margin-bottom:8px">🛒</div>
+      <div style="font-size:28px;font-weight:700;color:#1c1c1e">Solo</div>
+      <div style="font-size:14px;color:#8e8e93;margin-top:4px">Assistente de compras</div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,.08)">
+      <div style="font-size:16px;font-weight:600;margin-bottom:4px">Bem-vindo!</div>
+      <div style="font-size:13px;color:#8e8e93;margin-bottom:20px">Digite seu nome para entrar</div>
+      <input id="login-nome" placeholder="Seu nome" style="width:100%;padding:12px 14px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:10px;font-size:16px;color:#1c1c1e;outline:none;margin-bottom:12px" onkeydown="if(event.key==='Enter')fazerLogin()">
+      <button onclick="fazerLogin()" style="width:100%;background:#FB5C32;color:#fff;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:600;cursor:pointer">Entrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="app" id="main-app" style="display:none">
 
 <div class="tabs">
   <button class="tab-btn active" onclick="showTab('comprar',this)"><i class="ti ti-shopping-cart"></i>Comprar</button>
@@ -493,11 +511,13 @@ async function init() {
 }
 
 async function loadLista() {
-  const r = await dbGet('lista_permanente','select=*&order=nome.asc');
+  if(!currentUser)return;
+  const r = await dbGet('lista_permanente','select=*&order=nome.asc&user_id=eq.'+encodeURIComponent(currentUser.id));
   lista = Array.isArray(r) ? r : [];
 }
 async function loadHoje() {
-  const r = await dbGet('lista_hoje','select=*,lista_permanente(nome,marca,tamanho,unidade)&done=eq.false&order=created_at.asc');
+  if(!currentUser)return;
+  const r = await dbGet('lista_hoje','select=*,lista_permanente(nome,marca,tamanho,unidade)&done=eq.false&order=created_at.asc&user_id=eq.'+encodeURIComponent(currentUser.id));
   hojeList = Array.isArray(r) ? r : [];
 }
 
@@ -698,7 +718,7 @@ async function finalizarCompra() {
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>Salvando...';
   const total=cart.reduce((s,i)=>s+i.subtotal,0);
   const mercado=document.getElementById('c-mercado').value||'Supermercado';
-  const sessao=await dbPost('sessoes_compra',{mercado,data:new Date().toISOString().split('T')[0],total});
+  const sessao=await dbPost('sessoes_compra',{mercado,data:new Date().toISOString().split('T')[0],total,user_id:currentUser?.id});
   if(sessao){
     for(const item of cart){
       await dbPost('itens_compra',{sessao_id:sessao.id,nome:item.nome,marca:item.marca||'',tamanho:item.tamanho||'',unidade:item.unidade||'',preco:item.preco,qtd:item.qtd,subtotal:item.subtotal});
@@ -804,7 +824,7 @@ async function selecionarAC(listaId) {
   document.getElementById('hoje-input').value='';
   document.getElementById('ac-box').style.display='none';
   renderHoje(); renderQueue();
-  const novo=await dbPost('lista_hoje',{nome:item.nome,detalhe,lista_id:listaId,done:false});
+  const novo=await dbPost('lista_hoje',{nome:item.nome,detalhe,lista_id:listaId,done:false,user_id:currentUser?.id});
   if(novo){const idx=hojeList.findIndex(i=>i.id===tmpId);if(idx!==-1)hojeList[idx]={...novo,lista_permanente:item};}
 }
 async function addHoje() {
@@ -818,7 +838,7 @@ async function addHoje() {
   document.getElementById('hoje-input').value='';
   renderHoje(); renderQueue();
   // Sincroniza com Supabase em segundo plano
-  const novo=await dbPost('lista_hoje',{nome,detalhe:'',done:false});
+  const novo=await dbPost('lista_hoje',{nome,detalhe:'',done:false,user_id:currentUser?.id});
   if(novo){const idx=hojeList.findIndex(i=>i.id===tmpId);if(idx!==-1)hojeList[idx]=novo;}
   trackFreqHoje(nome);
 }
@@ -921,7 +941,7 @@ function abrirAddFixo() {
 function fecharAddFixo(){document.getElementById('fixo-form').style.display='none';editFixoId=null;}
 async function salvarFixo() {
   const nome=document.getElementById('f-nome').value.trim(); if(!nome)return;
-  const data={nome,marca:document.getElementById('f-marca').value,tamanho:document.getElementById('f-tamanho').value,unidade:document.getElementById('f-unidade').value,obs:document.getElementById('f-obs').value,compro_sempre:document.getElementById('f-sempre').checked};
+  const data={nome,marca:document.getElementById('f-marca').value,tamanho:document.getElementById('f-tamanho').value,unidade:document.getElementById('f-unidade').value,obs:document.getElementById('f-obs').value,compro_sempre:document.getElementById('f-sempre').checked,user_id:currentUser?.id};
   if(editFixoId){
     await dbPatch('lista_permanente',editFixoId,data);
     lista=lista.map(i=>i.id===editFixoId?{...i,...data}:i);
@@ -996,7 +1016,7 @@ Responda SOMENTE com JSON válido, sem texto extra, sem markdown:
 async function salvarCupom() {
   const mercado=document.getElementById('cup-mercado').value.trim()||'Supermercado';
   const total=cupomItems.reduce((s,i)=>s+i.preco*(i.qtd||1),0);
-  const sessao=await dbPost('sessoes_compra',{mercado,data:new Date().toISOString().split('T')[0],total});
+  const sessao=await dbPost('sessoes_compra',{mercado,data:new Date().toISOString().split('T')[0],total,user_id:currentUser?.id});
   if(sessao){
     for(const item of cupomItems){
       await dbPost('itens_compra',{sessao_id:sessao.id,nome:item.nome,preco:item.preco,qtd:item.qtd||1,subtotal:item.preco*(item.qtd||1)});
@@ -1012,7 +1032,7 @@ async function renderHistorico() {
   if(!hl)return;
   hd.style.display='none'; hl.style.display='block';
   hl.innerHTML='<div class="empty"><i class="ti ti-loader"></i><p>Carregando...</p></div>';
-  const sessoes=await dbGet('sessoes_compra','select=*&order=created_at.desc&limit=30');
+  const sessoes=await dbGet('sessoes_compra','select=*&order=created_at.desc&limit=30&user_id=eq.'+encodeURIComponent(currentUser?.id||''));
   if(!sessoes.length){
     hl.innerHTML='<div class="empty"><i class="ti ti-receipt"></i><p>Nenhuma compra registrada ainda</p></div>';
     return;
@@ -1062,6 +1082,59 @@ async function verCompra(id) {
 
 // ── BOOT ─────────────────────────────────────────────────────────────
 
+
+// ── LOGIN ─────────────────────────────────────────────────────────────
+async function fazerLogin() {
+  const nome = document.getElementById('login-nome').value.trim();
+  if (!nome) { alert('Digite seu nome para entrar.'); return; }
+  
+  // Check if user exists, create if not
+  const existing = await dbGet('usuarios', 'nome=eq.'+encodeURIComponent(nome)+'&select=*');
+  let user;
+  if (existing && existing.length > 0) {
+    user = existing[0];
+  } else {
+    user = await dbPost('usuarios', { nome });
+  }
+  
+  if (!user) {
+    // Fallback: use nome as ID if Supabase fails
+    user = { id: nome.toLowerCase().replace(/\s+/g,'-'), nome };
+  }
+  
+  currentUser = user;
+  localStorage.setItem('solo-user', JSON.stringify(user));
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+  document.getElementById('user-badge').textContent = '👤 ' + user.nome;
+  await init();
+}
+
+function trocarUsuario() {
+  if (!confirm('Trocar de usuário? Sua sessão atual será encerrada.')) return;
+  currentUser = null;
+  localStorage.removeItem('solo-user');
+  cart = []; lista = []; hojeList = [];
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('login-nome').value = '';
+}
+
+async function checkAutoLogin() {
+  const saved = localStorage.getItem('solo-user');
+  if (saved) {
+    try {
+      currentUser = JSON.parse(saved);
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('main-app').style.display = 'block';
+      document.getElementById('user-badge').textContent = '👤 ' + currentUser.nome;
+      await init();
+      return;
+    } catch {}
+  }
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
 // ── PRICE FIELD UTILITIES ─────────────────────────────────────────────
 function fmtCents(c){const s=String(c).padStart(3,'0');const i=s.slice(0,-2).replace(/^0+/,'')||'0';return i+','+s.slice(-2);}
 function priceKey(e,el){
@@ -1099,7 +1172,7 @@ async function buscarOpiniao(){
   btn.disabled=false;btn.innerHTML='<i class="ti ti-world-search"></i>Buscar opiniões na web';
 }
 
-init();
+checkAutoLogin();
 </script>
 </body>
 </html>
