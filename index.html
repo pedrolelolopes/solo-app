@@ -1,3 +1,4 @@
+<!-- Solo App v1.2 - Melhoria na leitura de fotos de etiqueta (nome, marca, tamanho, unidade) -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -689,17 +690,33 @@ async function lerFoto(input) {
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>Lendo...';
   try {
     const b64=await toB64(file);
-    // haiku para etiqueta simples: rápido e barato
-    const resp=await claudeImg(
-      'Etiqueta de preço de supermercado. Extraia o nome do produto e o preço. Responda SOMENTE com JSON válido, sem texto extra: {"nome":"...","preco":0.00}',
-      b64, file.type, 'claude-haiku-4-5-20251001'
-    );
-    const p = extractJSON(resp);
-    if(p && p.nome){
+    const prompt=`Analise esta etiqueta de preço de supermercado brasileiro e extraia as informações do produto.
+Responda APENAS com JSON válido, sem texto extra:
+{
+  "nome": "nome genérico do produto sem marca (ex: Leite Integral, Arroz Agulhinha)",
+  "marca": "marca do produto ou null",
+  "tamanho": "número da quantidade (ex: 1, 500, 200) ou null",
+  "unidade": "unidade de venda: g, kg, ml, L, un, pç, cx, pct ou null",
+  "preco": 0.00
+}`;
+    const resp=await ai(prompt, b64, file.type, 'claude-haiku-4-5-20251001', 300);
+    const p=extractJSON(resp);
+    if(p && p.nome) {
       document.getElementById('c-nome').value = p.nome;
-      if(p.preco) document.getElementById('c-preco').value = parseFloat(p.preco).toLocaleString('pt-BR',{minimumFractionDigits:2});
+      if(p.marca && p.marca !== 'null') document.getElementById('c-marca').value = p.marca;
+      if(p.tamanho && p.tamanho !== 'null') document.getElementById('c-tamanho').value = p.tamanho;
+      if(p.unidade && p.unidade !== 'null') {
+        const sel = document.getElementById('c-unidade');
+        // Tenta selecionar a unidade no dropdown
+        for(let i=0; i<sel.options.length; i++) {
+          if(sel.options[i].value.toLowerCase() === String(p.unidade).toLowerCase()) {
+            sel.selectedIndex = i; break;
+          }
+        }
+      }
+      if(p.preco) setPriceVal('c-preco', p.preco);
     } else {
-      alert('Não consegui ler o preço. Dicas: boa iluminação, sem reflexo, câmera estável e próxima da etiqueta.');
+      alert('Não consegui ler a etiqueta.\n\nDicas:\n• Boa iluminação\n• Sem reflexo\n• Câmera estável e próxima');
     }
   } catch(e) {
     alert('Erro ao ler foto: '+e.message);
@@ -1035,39 +1052,36 @@ async function lerCupom(input) {
   document.getElementById('cup-result').style.display='none';
   try {
     const b64=await toB64(file);
-    // sonnet para cupom: mais preciso com documentos complexos
-    const resp=await claudeImg(
-      `Cupom fiscal de supermercado brasileiro. Extraia TODOS os itens com nome limpo (sem código de barras), preço unitário e quantidade.
-Responda SOMENTE com JSON válido, sem texto extra, sem markdown:
-{"itens":[{"nome":"Nome do produto","preco":0.00,"qtd":1.0}]}`,
-      b64, file.type, 'claude-sonnet-4-6'
-    );
-    const p = extractJSON(resp);
-    if(!p || !p.itens || !p.itens.length) {
-      alert('Não consegui extrair os itens. Tente foto mais nítida, sem reflexo, com o cupom bem iluminado e plano.');
-      btn.disabled=false; btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';
-      input.value=''; return;
+    const prompt=`Analise este cupom fiscal de supermercado brasileiro e liste TODOS os produtos.
+Responda APENAS com array JSON, sem nenhum texto antes ou depois:
+[{"nome":"Nome do produto","preco":0.00,"qtd":1}]`;
+    const resp=await ai(prompt,b64,file.type,'claude-sonnet-4-6',1500);
+    let itens=null;
+    const parsed=extractJSON(resp);
+    if(parsed){
+      if(Array.isArray(parsed))itens=parsed;
+      else if(parsed.itens)itens=parsed.itens;
+      else if(parsed.items)itens=parsed.items;
     }
-    cupomItems=p.itens;
-    const total=cupomItems.reduce((s,i)=>s+parseFloat(i.preco)*(parseFloat(i.qtd)||1),0);
+    if(!itens){const m=resp.match(/\[[\s\S]*\]/);if(m)try{itens=JSON.parse(m[0]);}catch{}}
+    if(!itens||!itens.length){
+      alert('Não consegui ler o cupom.\n\nDicas:\n• Foto bem iluminada\n• Sem reflexo\n• Cupom plano e legível');
+      btn.disabled=false;btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';input.value='';return;
+    }
+    cupomItems=itens.map(i=>({nome:i.nome||i.name||'Item',preco:parseFloat(i.preco||i.price||0),qtd:parseFloat(i.qtd||i.qty||1)})).filter(i=>i.preco>0);
+    if(!cupomItems.length){alert('Itens encontrados mas sem preços válidos. Tente foto mais clara.');btn.disabled=false;btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';input.value='';return;}
+    const total=cupomItems.reduce((s,i)=>s+i.preco*(i.qtd||1),0);
     document.getElementById('cup-count').textContent=cupomItems.length+' ITENS ENCONTRADOS';
-    document.getElementById('cup-items').innerHTML=cupomItems.map(item=>`
-      <div class="li">
-        <div class="li-info">
-          <div class="li-name">${item.nome}</div>
-          ${parseFloat(item.qtd)!==1?`<div class="li-sub">× ${fmtN(item.qtd)}</div>`:''}
-        </div>
-        <div class="li-price">${fmtBRL(parseFloat(item.preco)*(parseFloat(item.qtd)||1))}</div>
-      </div>`).join('');
+    document.getElementById('cup-items').innerHTML=cupomItems.map(item=>`<div class="li"><div class="li-info"><div class="li-name">${item.nome}</div>${item.qtd!==1?`<div class="li-sub">× ${fmtN(item.qtd)}</div>`:''}</div><div class="li-price">${fmtBRL(item.preco*(item.qtd||1))}</div></div>`).join('');
     document.getElementById('cup-total').textContent=fmtBRL(total);
     document.getElementById('cup-result').style.display='block';
     document.getElementById('cup-save').disabled=false;
     document.getElementById('cup-save').innerHTML='<i class="ti ti-device-floppy"></i>Salvar';
   } catch(e) {
-    alert('Erro ao ler cupom: '+e.message+'\n\nTente foto mais clara e bem iluminada.');
+    console.error('lerCupom:',e);
+    alert('Erro ao processar. Tente novamente com foto mais clara.');
   }
-  btn.disabled=false; btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';
-  input.value='';
+  btn.disabled=false;btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';input.value='';
 }
 async function salvarCupom() {
   const mercado=document.getElementById('cup-mercado').value.trim()||'Supermercado';
