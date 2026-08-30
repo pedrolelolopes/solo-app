@@ -1,4 +1,4 @@
-<!-- Solo App v1.2 - Melhoria na leitura de fotos de etiqueta (nome, marca, tamanho, unidade) -->
+<!-- Solo App v1.3.0 - Módulo Cardápio Semanal com geração de lista de compras -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -111,6 +111,7 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
   <button class="tab-btn" onclick="showTab('folhetos',this)"><i class="ti ti-file-description"></i>Folhetos</button>
   <button class="tab-btn" onclick="showTab('lista',this)"><i class="ti ti-clipboard-list"></i>Lista</button>
   <button class="tab-btn" onclick="showTab('cupom',this)"><i class="ti ti-camera"></i>Cupom</button>
+  <button class="tab-btn" onclick="showTab('cardapio',this)"><i class="ti ti-calendar-week"></i>Cardápio</button>
   <button class="tab-btn" onclick="showTab('historico',this)"><i class="ti ti-receipt"></i>Histórico</button>
 </div>
 
@@ -384,6 +385,83 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 </div>
 
 <!-- ══ HISTÓRICO ══════════════════════════════════════════════════════ -->
+<!-- CARDÁPIO -->
+<div id="s-cardapio" class="screen">
+  <div class="subtabs" style="margin-top:8px">
+    <button class="subtab active" onclick="showCardapioTab('semana',this)">Semana</button>
+    <button class="subtab" onclick="showCardapioTab('receitas',this)">Receitas</button>
+  </div>
+
+  <!-- SEMANA -->
+  <div id="ct-semana">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <button onclick="navSemana(-1)" style="background:none;border:1px solid #e5e5ea;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:18px">‹</button>
+      <div style="text-align:center">
+        <div style="font-size:13px;font-weight:600" id="semana-titulo"></div>
+        <div style="font-size:11px;color:#8e8e93" id="semana-sub"></div>
+      </div>
+      <button onclick="navSemana(1)" style="background:none;border:1px solid #e5e5ea;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:18px">›</button>
+    </div>
+    <div id="semana-grid"></div>
+    <button onclick="gerarListaCompras()" id="btn-gerar" style="width:100%;margin-top:12px;padding:13px;border:none;border-radius:12px;background:#FB5C32;color:#fff;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+      <i class="ti ti-shopping-cart-plus"></i>Gerar lista de compras da semana
+    </button>
+    <div id="gerar-result" style="display:none;margin-top:10px"></div>
+  </div>
+
+  <!-- RECEITAS -->
+  <div id="ct-receitas" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <input id="receita-busca" placeholder="Buscar receita..." style="flex:1;padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:14px;color:#1c1c1e;outline:none;margin-right:8px" oninput="renderReceitas()">
+      <button onclick="abrirNovaReceita()" style="background:#FB5C32;color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px"><i class="ti ti-plus"></i>Nova</button>
+    </div>
+
+    <!-- Formulário de receita -->
+    <div id="receita-form" style="display:none;background:#fff7f5;border:1px solid rgba(251,92,50,.25);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:#FB5C32;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px" id="receita-form-title">Nova receita</div>
+      <div style="display:grid;grid-template-columns:1fr 100px;gap:8px;margin-bottom:10px">
+        <div><label style="display:block;font-size:12px;color:#8e8e93;margin-bottom:4px">Nome da receita *</label><input id="r-nome" placeholder="Ex: Frango grelhado"></div>
+        <div><label style="display:block;font-size:12px;color:#8e8e93;margin-bottom:4px">Porções</label><input id="r-porcoes" type="number" value="1" min="1" style="padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:14px;width:100%;outline:none"></div>
+      </div>
+      <div><label style="display:block;font-size:12px;color:#8e8e93;margin-bottom:4px">Descrição (opcional)</label><input id="r-desc" placeholder="Modo de preparo resumido..." style="width:100%;padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:14px;color:#1c1c1e;outline:none;margin-bottom:12px"></div>
+
+      <!-- Ingredientes -->
+      <div style="font-size:12px;font-weight:600;color:#636366;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ingredientes</div>
+      <div id="ing-list"></div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 70px 80px 36px;gap:6px;margin-bottom:10px;align-items:end" id="ing-add-row">
+        <div><input id="ing-nome" placeholder="Ingrediente" style="width:100%;padding:8px 10px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:13px;color:#1c1c1e;outline:none"></div>
+        <div><input id="ing-qtd" type="number" placeholder="Qtd" step="0.1" style="width:100%;padding:8px 10px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:13px;color:#1c1c1e;outline:none"></div>
+        <div><select id="ing-un" style="width:100%;padding:8px 6px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:13px;color:#1c1c1e;outline:none"><option>g</option><option>kg</option><option>ml</option><option>L</option><option>un</option><option>pç</option><option>cx</option><option>pct</option><option>colher</option><option>xícara</option></select></div>
+        <button onclick="addIngrediente()" style="padding:8px;background:#FB5C32;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">+</button>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button onclick="fecharReceita()" style="flex:1;padding:10px;border:1px solid #e5e5ea;border-radius:10px;background:#f2f2f7;font-size:14px;cursor:pointer">Cancelar</button>
+        <button onclick="salvarReceita()" style="flex:1;padding:10px;border:none;border-radius:10px;background:#FB5C32;color:#fff;font-size:14px;font-weight:500;cursor:pointer">Salvar receita</button>
+      </div>
+    </div>
+
+    <div id="receitas-list"></div>
+  </div>
+</div>
+
+<!-- MODAL SELECIONAR RECEITA -->
+<div id="modal-receita-sel" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;padding:20px;overflow-y:auto">
+  <div style="background:#fff;border-radius:16px;max-width:480px;margin:0 auto;padding:20px">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px" id="modal-sel-titulo">Selecionar receita</div>
+    <div style="font-size:12px;color:#8e8e93;margin-bottom:14px" id="modal-sel-sub"></div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:#8e8e93;display:block;margin-bottom:4px">Porções</label>
+      <input id="modal-porcoes" type="number" value="1" min="1" style="width:100%;padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:14px;outline:none">
+    </div>
+    <div id="modal-receitas-opcoes" style="max-height:40vh;overflow-y:auto;margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="fecharModalReceita()" style="flex:1;padding:11px;border:1px solid #e5e5ea;border-radius:10px;background:#f2f2f7;font-size:14px;cursor:pointer">Cancelar</button>
+      <button onclick="limparCelula()" style="flex:1;padding:11px;border:none;border-radius:10px;background:#f2f2f7;color:#ff3b30;font-size:14px;cursor:pointer">Remover</button>
+    </div>
+  </div>
+</div>
+
 <div id="s-historico" class="screen">
   <div id="hist-list"></div>
   <div id="hist-detail" style="display:none"></div>
@@ -508,6 +586,7 @@ function fmtN(v) {
 
 // ── ESTADO ───────────────────────────────────────────────────────────
 let cart=[], lista=[], hojeList=[], folhetos=[];
+let receitas=[], cardapioSemana=[], ingredientesTemp=[], editReceitaId=null, celulaSelecionada=null, semanaOffset=0;
 let editCartId=null, editFixoId=null;
 let pendingCS=null, pendingFixo=null;
 let cupomItems=[], cartCtr=0;
@@ -540,6 +619,7 @@ function showTab(id,el) {
   if(id==='lista'){renderHoje();renderFixos();}
   if(id==='historico')renderHistorico();
   if(id==='folhetos')renderFolhetos();
+  if(id==='cardapio'){renderSemana();renderReceitas();}
 }
 function showSubtab(id,el) {
   document.getElementById('st-hoje').style.display=id==='hoje'?'block':'none';
@@ -1390,6 +1470,338 @@ Resposta em português brasileiro, curta e natural. Preço em reais com vírgula
     falar('Erro ao processar. Tente novamente.');
     setVozStatus('❌ Erro: ' + e.message, '#ff3b30');
   }
+}
+
+
+// ── CARDÁPIO ──────────────────────────────────────────────────────────
+
+const DIAS = ['seg','ter','qua','qui','sex','sab','dom'];
+const DIAS_LABEL = {seg:'Segunda',ter:'Terça',qua:'Quarta',qui:'Quinta',sex:'Sexta',sab:'Sábado',dom:'Domingo'};
+const REFEICOES = ['cafe','almoco','lanche','janta','snack'];
+const REFEICOES_LABEL = {cafe:'☕ Café',almoco:'🍽️ Almoço',lanche:'🥪 Lanche',janta:'🌙 Janta',snack:'🍎 Snack'};
+
+// Unificação de unidades
+const CONV = {
+  g:1, kg:1000,
+  ml:1, L:1000,
+};
+function converteParaBase(qtd, un) {
+  const f = CONV[un];
+  return f ? { val: qtd * f, grupo: (un==='g'||un==='kg') ? 'peso' : 'volume' } : null;
+}
+function formataQtdUnif(val, grupo) {
+  if (grupo === 'peso') return val >= 1000 ? { qtd: +(val/1000).toFixed(2), un: 'kg' } : { qtd: +val.toFixed(0), un: 'g' };
+  if (grupo === 'volume') return val >= 1000 ? { qtd: +(val/1000).toFixed(2), un: 'L' } : { qtd: +val.toFixed(0), un: 'ml' };
+  return null;
+}
+
+function getSegundaFeira(offset=0) {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff + offset * 7);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function showCardapioTab(id, el) {
+  document.getElementById('ct-semana').style.display = id==='semana' ? 'block' : 'none';
+  document.getElementById('ct-receitas').style.display = id==='receitas' ? 'block' : 'none';
+  document.querySelectorAll('#s-cardapio .subtab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  if (id==='receitas') renderReceitas();
+  if (id==='semana') renderSemana();
+}
+
+function navSemana(dir) { semanaOffset += dir; renderSemana(); }
+
+async function renderSemana() {
+  const seg = getSegundaFeira(semanaOffset);
+  const fim = new Date(seg); fim.setDate(fim.getDate() + 6);
+  const opts = { day:'2-digit', month:'2-digit' };
+  document.getElementById('semana-titulo').textContent =
+    seg.toLocaleDateString('pt-BR', opts) + ' – ' + fim.toLocaleDateString('pt-BR', opts);
+  document.getElementById('semana-sub').textContent = semanaOffset===0 ? 'Semana atual' : semanaOffset<0 ? `${Math.abs(semanaOffset)} semana(s) atrás` : `${semanaOffset} semana(s) à frente`;
+
+  const semanaStr = seg.toISOString().split('T')[0];
+
+  // Carrega cardápio da semana
+  const rows = await dbGet('cardapio', `semana=eq.${semanaStr}&user_id=eq.${encodeURIComponent(currentUser?.id||'')}&select=*`);
+  cardapioSemana = Array.isArray(rows) ? rows : [];
+
+  // Carrega receitas se necessário
+  if (!receitas.length) await loadReceitas();
+
+  const grid = document.getElementById('semana-grid');
+  grid.innerHTML = DIAS.map(dia => {
+    const diaCells = REFEICOES.map(ref => {
+      const entry = cardapioSemana.find(c => c.dia===dia && c.refeicao===ref);
+      const rec = entry ? receitas.find(r => r.id===entry.receita_id) : null;
+      return `<div onclick="abrirModalReceita('${dia}','${ref}','${semanaStr}')"
+        style="padding:6px;border-radius:8px;background:${rec?'rgba(251,92,50,.1)':'#f2f2f7'};cursor:pointer;min-height:36px;border:1px solid ${rec?'rgba(251,92,50,.3)':'#e5e5ea'}">
+        <div style="font-size:10px;color:#8e8e93">${REFEICOES_LABEL[ref]}</div>
+        ${rec ? `<div style="font-size:11px;font-weight:500;color:#FB5C32;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${rec.nome}</div>
+        <div style="font-size:10px;color:#8e8e93">${entry.porcoes} porção${entry.porcoes!==1?'ões':''}</div>` :
+        '<div style="font-size:10px;color:#c7c7cc">+ adicionar</div>'}
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:#1c1c1e;margin-bottom:6px">${DIAS_LABEL[dia]}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">${diaCells}</div>
+    </div>`;
+  }).join('');
+}
+
+// Modal selecionar receita
+let modalDia='', modalRef='', modalSemana='';
+function abrirModalReceita(dia, ref, semana) {
+  modalDia=dia; modalRef=ref; modalSemana=semana;
+  document.getElementById('modal-sel-titulo').textContent = DIAS_LABEL[dia];
+  document.getElementById('modal-sel-sub').textContent = REFEICOES_LABEL[ref];
+  const entry = cardapioSemana.find(c=>c.dia===dia&&c.refeicao===ref);
+  document.getElementById('modal-porcoes').value = entry?.porcoes || 1;
+  document.getElementById('modal-receitas-opcoes').innerHTML = receitas.length ?
+    receitas.map(r=>`
+      <div onclick="selecionarReceita('${r.id}')"
+        style="padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:6px;background:${entry?.receita_id===r.id?'rgba(251,92,50,.1)':'#f2f2f7'};border:1px solid ${entry?.receita_id===r.id?'rgba(251,92,50,.4)':'#e5e5ea'}">
+        <div style="font-weight:500;font-size:14px">${r.nome}</div>
+        <div style="font-size:12px;color:#8e8e93">${r.porcoes_padrao} porção${r.porcoes_padrao!==1?'ões':''} padrão · ${r.ingredientes?.length||0} ingredientes</div>
+      </div>`).join('') :
+    '<div style="text-align:center;padding:20px;color:#8e8e93;font-size:13px">Nenhuma receita cadastrada ainda</div>';
+  document.getElementById('modal-receita-sel').style.display = 'block';
+}
+
+async function selecionarReceita(receitaId) {
+  const porcoes = parseInt(document.getElementById('modal-porcoes').value) || 1;
+  const existing = cardapioSemana.find(c=>c.dia===modalDia&&c.refeicao===modalRef);
+  if (existing) {
+    await dbPatch('cardapio', existing.id, { receita_id: receitaId, porcoes });
+  } else {
+    await dbPost('cardapio', { semana: modalSemana, dia: modalDia, refeicao: modalRef, receita_id: receitaId, porcoes, user_id: currentUser?.id });
+  }
+  fecharModalReceita();
+  renderSemana();
+}
+
+async function limparCelula() {
+  const existing = cardapioSemana.find(c=>c.dia===modalDia&&c.refeicao===modalRef);
+  if (existing) await dbDel('cardapio', existing.id);
+  fecharModalReceita();
+  renderSemana();
+}
+function fecharModalReceita() { document.getElementById('modal-receita-sel').style.display='none'; }
+
+// Gerar lista de compras
+async function gerarListaCompras() {
+  const btn = document.getElementById('btn-gerar');
+  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>Gerando...';
+
+  const semanaStr = getSegundaFeira(semanaOffset).toISOString().split('T')[0];
+  const entries = cardapioSemana.filter(c=>c.receita_id);
+
+  if (!entries.length) {
+    alert('Nenhuma refeição planejada nessa semana ainda.');
+    btn.disabled=false; btn.innerHTML='<i class="ti ti-shopping-cart-plus"></i>Gerar lista de compras da semana';
+    return;
+  }
+
+  // Soma ingredientes
+  const mapa = {}; // chave: nome normalizado
+  for (const entry of entries) {
+    const rec = receitas.find(r=>r.id===entry.receita_id);
+    if (!rec || !rec.ingredientes) continue;
+    const fator = entry.porcoes / (rec.porcoes_padrao || 1);
+    for (const ing of rec.ingredientes) {
+      const chave = ing.nome.toLowerCase().trim();
+      const qtdAjustada = ing.quantidade * fator;
+      if (!mapa[chave]) {
+        mapa[chave] = { nome: ing.nome, itens: [] };
+      }
+      mapa[chave].itens.push({ qtd: qtdAjustada, un: ing.unidade });
+    }
+  }
+
+  // Unifica unidades por ingrediente
+  const listaFinal = [];
+  for (const chave of Object.keys(mapa)) {
+    const { nome, itens } = mapa[chave];
+    // Agrupa por grupo (peso, volume, outros)
+    const grupos = {};
+    const outros = [];
+    for (const { qtd, un } of itens) {
+      const conv = converteParaBase(qtd, un);
+      if (conv) {
+        if (!grupos[conv.grupo]) grupos[conv.grupo] = 0;
+        grupos[conv.grupo] += conv.val;
+      } else {
+        // Unidades não convertíveis (un, colher, etc) — agrupa por unidade
+        const k = un;
+        if (!grupos[k]) grupos[k] = 0;
+        grupos[k] += qtd;
+      }
+    }
+    for (const [grupo, total] of Object.entries(grupos)) {
+      const fmt = formataQtdUnif(total, grupo);
+      if (fmt) {
+        listaFinal.push({ nome, qtd: fmt.qtd, un: fmt.un });
+      } else {
+        listaFinal.push({ nome, qtd: +total.toFixed(2), un: grupo });
+      }
+    }
+  }
+
+  // Adiciona na lista de hoje
+  let adicionados = 0;
+  for (const item of listaFinal) {
+    const detalhe = `${item.qtd}${item.un} — cardápio semana`;
+    const tmpId = 'tmp-' + Date.now() + Math.random();
+    hojeList.push({ id: tmpId, nome: item.nome, detalhe, done: false });
+    dbPost('lista_hoje', { nome: item.nome, detalhe, done: false, user_id: currentUser?.id });
+    adicionados++;
+  }
+
+  renderHoje(); renderQueue();
+
+  // Mostra resultado
+  const resultEl = document.getElementById('gerar-result');
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = `<div style="background:#e8f8f0;border:1px solid #2ea86b;border-radius:10px;padding:12px;font-size:13px">
+    ✅ <strong>${adicionados} ingredientes</strong> adicionados à lista de hoje!
+    ${listaFinal.map(i=>`<div style="margin-top:6px;color:#1c1c1e">• ${i.nome}: <strong>${i.qtd}${i.un}</strong></div>`).join('')}
+  </div>`;
+
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-shopping-cart-plus"></i>Gerar lista de compras da semana';
+}
+
+// ── RECEITAS ──────────────────────────────────────────────────────────
+async function loadReceitas() {
+  const r = await dbGet('receitas', `select=*&user_id=eq.${encodeURIComponent(currentUser?.id||'')}&order=nome.asc`);
+  const lista_r = Array.isArray(r) ? r : [];
+  // Carrega ingredientes de cada receita
+  for (const rec of lista_r) {
+    const ings = await dbGet('ingredientes_receita', `receita_id=eq.${rec.id}&select=*&order=created_at.asc`);
+    rec.ingredientes = Array.isArray(ings) ? ings : [];
+  }
+  receitas = lista_r;
+}
+
+function renderReceitas() {
+  const busca = (document.getElementById('receita-busca')?.value||'').toLowerCase();
+  const filtradas = receitas.filter(r=>r.nome.toLowerCase().includes(busca));
+  const cont = document.getElementById('receitas-list');
+  if (!cont) return;
+  if (!filtradas.length) {
+    cont.innerHTML = `<div style="text-align:center;padding:32px 0;color:#8e8e93"><i class="ti ti-chef-hat" style="font-size:28px;display:block;margin-bottom:8px;opacity:.4"></i><p style="font-size:13px">${receitas.length===0?'Nenhuma receita cadastrada ainda':'Nenhum resultado'}</p></div>`;
+    return;
+  }
+  cont.innerHTML = filtradas.map(rec=>`
+    <div style="background:#fff;border-radius:12px;padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="flex:1;min-width:0;cursor:pointer" onclick="toggleReceitaDetalhe('${rec.id}')">
+          <div style="font-weight:500;font-size:15px">${rec.nome}</div>
+          <div style="font-size:12px;color:#8e8e93">${rec.porcoes_padrao} porção${rec.porcoes_padrao!==1?'ões':''} · ${rec.ingredientes.length} ingredientes</div>
+        </div>
+        <button onclick="editarReceita('${rec.id}')" style="background:none;border:none;cursor:pointer;padding:5px;color:#8e8e93;font-size:16px"><i class="ti ti-pencil"></i></button>
+        <button onclick="excluirReceita('${rec.id}')" style="background:none;border:none;cursor:pointer;padding:5px;color:#8e8e93;font-size:16px"><i class="ti ti-x"></i></button>
+      </div>
+      <div id="rec-det-${rec.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #f2f2f7">
+        ${rec.descricao ? `<div style="font-size:13px;color:#636366;margin-bottom:8px">${rec.descricao}</div>` : ''}
+        ${rec.ingredientes.map(i=>`<div style="font-size:13px;padding:3px 0;color:#1c1c1e">• ${i.nome}: <strong>${i.quantidade}${i.unidade}</strong></div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function toggleReceitaDetalhe(id) {
+  const el = document.getElementById('rec-det-'+id);
+  if (el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+
+function abrirNovaReceita() {
+  editReceitaId = null;
+  ingredientesTemp = [];
+  document.getElementById('r-nome').value = '';
+  document.getElementById('r-porcoes').value = '1';
+  document.getElementById('r-desc').value = '';
+  document.getElementById('ing-nome').value = '';
+  document.getElementById('ing-qtd').value = '';
+  document.getElementById('ing-un').value = 'g';
+  document.getElementById('receita-form-title').textContent = 'Nova receita';
+  document.getElementById('receita-form').style.display = 'block';
+  renderIngredientesTemp();
+}
+
+function editarReceita(id) {
+  const rec = receitas.find(r=>r.id===id); if(!rec)return;
+  editReceitaId = id;
+  ingredientesTemp = rec.ingredientes.map(i=>({...i}));
+  document.getElementById('r-nome').value = rec.nome;
+  document.getElementById('r-porcoes').value = rec.porcoes_padrao;
+  document.getElementById('r-desc').value = rec.descricao||'';
+  document.getElementById('receita-form-title').textContent = 'Editar receita';
+  document.getElementById('receita-form').style.display = 'block';
+  renderIngredientesTemp();
+}
+
+function fecharReceita() { document.getElementById('receita-form').style.display='none'; editReceitaId=null; }
+
+function addIngrediente() {
+  const nome = document.getElementById('ing-nome').value.trim();
+  const qtd = parseFloat(document.getElementById('ing-qtd').value);
+  const un = document.getElementById('ing-un').value;
+  if (!nome || !qtd) return;
+  ingredientesTemp.push({ nome, quantidade: qtd, unidade: un, tmpId: Date.now() });
+  document.getElementById('ing-nome').value = '';
+  document.getElementById('ing-qtd').value = '';
+  renderIngredientesTemp();
+  document.getElementById('ing-nome').focus();
+}
+
+function removerIngTemp(tmpId) {
+  ingredientesTemp = ingredientesTemp.filter(i=>(i.tmpId||i.id)!==tmpId);
+  renderIngredientesTemp();
+}
+
+function renderIngredientesTemp() {
+  document.getElementById('ing-list').innerHTML = ingredientesTemp.map(i=>`
+    <div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid #f2f2f7;gap:8px">
+      <div style="flex:1;font-size:13px">${i.nome}</div>
+      <div style="font-size:13px;font-weight:500;color:#FB5C32">${i.quantidade}${i.unidade}</div>
+      <button onclick="removerIngTemp('${i.tmpId||i.id}')" style="background:none;border:none;color:#8e8e93;font-size:16px;cursor:pointer;padding:0 4px">×</button>
+    </div>`).join('');
+}
+
+async function salvarReceita() {
+  const nome = document.getElementById('r-nome').value.trim();
+  if (!nome) { alert('Informe o nome da receita.'); return; }
+  const data = { nome, porcoes_padrao: parseInt(document.getElementById('r-porcoes').value)||1, descricao: document.getElementById('r-desc').value, user_id: currentUser?.id };
+
+  if (editReceitaId) {
+    await dbPatch('receitas', editReceitaId, data);
+    // Remove ingredientes antigos e reinsere
+    const ingsAntigos = await dbGet('ingredientes_receita', `receita_id=eq.${editReceitaId}&select=id`);
+    for (const ing of (ingsAntigos||[])) await dbDel('ingredientes_receita', ing.id);
+    for (const ing of ingredientesTemp) {
+      await dbPost('ingredientes_receita', { receita_id: editReceitaId, nome: ing.nome, quantidade: ing.quantidade, unidade: ing.unidade });
+    }
+  } else {
+    const nova = await dbPost('receitas', data);
+    if (nova) {
+      for (const ing of ingredientesTemp) {
+        await dbPost('ingredientes_receita', { receita_id: nova.id, nome: ing.nome, quantidade: ing.quantidade, unidade: ing.unidade });
+      }
+    }
+  }
+
+  fecharReceita();
+  await loadReceitas();
+  renderReceitas();
+}
+
+async function excluirReceita(id) {
+  if (!confirm('Excluir esta receita?')) return;
+  await dbDel('receitas', id);
+  receitas = receitas.filter(r=>r.id!==id);
+  renderReceitas();
 }
 
 checkAutoLogin();
