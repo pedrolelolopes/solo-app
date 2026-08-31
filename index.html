@@ -1,4 +1,4 @@
-<!-- Solo App v1.3.0 - Módulo Cardápio Semanal com geração de lista de compras -->
+<!-- Solo App v1.3.1 - Cardápio: modal melhorado, busca de receitas, modo de preparo e link de vídeo -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -423,7 +423,12 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
         <div><label style="display:block;font-size:12px;color:#8e8e93;margin-bottom:4px">Nome da receita *</label><input id="r-nome" placeholder="Ex: Frango grelhado"></div>
         <div><label style="display:block;font-size:12px;color:#8e8e93;margin-bottom:4px">Porções</label><input id="r-porcoes" type="number" value="1" min="1" style="padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:14px;width:100%;outline:none"></div>
       </div>
-      <div><label style="display:block;font-size:12px;color:#8e8e93;margin-bottom:4px">Descrição (opcional)</label><input id="r-desc" placeholder="Modo de preparo resumido..." style="width:100%;padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:14px;color:#1c1c1e;outline:none;margin-bottom:12px"></div>
+      <div>
+        <label style="display:block;font-size:12px;color:#8e8e93;margin-bottom:4px">Modo de preparo</label>
+        <textarea id="r-desc" placeholder="Descreva o passo a passo..." rows="3" style="width:100%;padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:13px;color:#1c1c1e;outline:none;resize:vertical;margin-bottom:8px;font-family:inherit"></textarea>
+        <label style="display:block;font-size:12px;color:#8e8e93;margin-bottom:4px">Link de vídeo (opcional)</label>
+        <input id="r-video" placeholder="https://youtube.com/..." style="width:100%;padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:14px;color:#1c1c1e;outline:none;margin-bottom:12px">
+      </div>
 
       <!-- Ingredientes -->
       <div style="font-size:12px;font-weight:600;color:#636366;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ingredientes</div>
@@ -446,18 +451,77 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 </div>
 
 <!-- MODAL SELECIONAR RECEITA -->
-<div id="modal-receita-sel" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;padding:20px;overflow-y:auto">
-  <div style="background:#fff;border-radius:16px;max-width:480px;margin:0 auto;padding:20px">
-    <div style="font-size:16px;font-weight:700;margin-bottom:4px" id="modal-sel-titulo">Selecionar receita</div>
-    <div style="font-size:12px;color:#8e8e93;margin-bottom:14px" id="modal-sel-sub"></div>
-    <div style="margin-bottom:12px">
+<div id="modal-receita-sel" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;padding:16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:16px;max-width:480px;margin:0 auto;overflow:hidden">
+    <!-- Header -->
+    <div style="padding:16px 16px 12px;border-bottom:1px solid #f2f2f7">
+      <div style="font-size:16px;font-weight:700" id="modal-sel-titulo"></div>
+      <div style="font-size:12px;color:#8e8e93;margin-top:2px" id="modal-sel-sub"></div>
+    </div>
+    <!-- Porções -->
+    <div style="padding:12px 16px;border-bottom:1px solid #f2f2f7">
       <label style="font-size:12px;color:#8e8e93;display:block;margin-bottom:4px">Porções</label>
       <input id="modal-porcoes" type="number" value="1" min="1" style="width:100%;padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:14px;outline:none">
     </div>
-    <div id="modal-receitas-opcoes" style="max-height:40vh;overflow-y:auto;margin-bottom:14px"></div>
-    <div style="display:flex;gap:8px">
+    <!-- Busca + botão nova receita -->
+    <div style="padding:12px 16px 8px;border-bottom:1px solid #f2f2f7">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input id="modal-busca-receita" placeholder="Buscar receita..." oninput="filtrarReceitasModal()"
+          style="flex:1;padding:9px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:13px;color:#1c1c1e;outline:none">
+        <button onclick="abrirNovaReceitaDoModal()" style="background:#FB5C32;color:#fff;border:none;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap">+ Nova</button>
+      </div>
+      <div id="modal-receitas-opcoes" style="max-height:35vh;overflow-y:auto"></div>
+    </div>
+    <!-- Botões -->
+    <div style="padding:12px 16px;display:flex;gap:8px">
       <button onclick="fecharModalReceita()" style="flex:1;padding:11px;border:1px solid #e5e5ea;border-radius:10px;background:#f2f2f7;font-size:14px;cursor:pointer">Cancelar</button>
-      <button onclick="limparCelula()" style="flex:1;padding:11px;border:none;border-radius:10px;background:#f2f2f7;color:#ff3b30;font-size:14px;cursor:pointer">Remover</button>
+      <button onclick="limparCelula()" style="flex:1;padding:11px;border:none;border-radius:10px;background:#fff0f0;color:#ff3b30;font-size:14px;cursor:pointer">Remover</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVA RECEITA (dentro do cardápio) -->
+<div id="modal-nova-receita" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;padding:16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:16px;max-width:480px;margin:0 auto;overflow:hidden">
+    <div style="padding:16px 16px 12px;border-bottom:1px solid #f2f2f7;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:16px;font-weight:700" id="mnr-titulo">Nova receita</div>
+      <button onclick="fecharModalNovaReceita()" style="background:none;border:none;font-size:22px;color:#8e8e93;cursor:pointer">×</button>
+    </div>
+    <div style="padding:16px;overflow-y:auto;max-height:75vh">
+      <!-- Nome e porções -->
+      <div style="display:grid;grid-template-columns:1fr 90px;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:12px;color:#8e8e93;display:block;margin-bottom:4px">Nome da receita *</label>
+          <input id="mnr-nome" placeholder="Ex: Frango grelhado" style="width:100%;padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:14px;color:#1c1c1e;outline:none">
+        </div>
+        <div>
+          <label style="font-size:12px;color:#8e8e93;display:block;margin-bottom:4px">Porções</label>
+          <input id="mnr-porcoes" type="number" value="1" min="1" style="width:100%;padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:14px;outline:none">
+        </div>
+      </div>
+      <!-- Ingredientes -->
+      <div style="font-size:12px;font-weight:600;color:#636366;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ingredientes</div>
+      <div id="mnr-ing-list"></div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 65px 75px 34px;gap:5px;margin-bottom:12px;align-items:end">
+        <input id="mnr-ing-nome" placeholder="Ingrediente" style="padding:8px 10px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:13px;color:#1c1c1e;outline:none;width:100%">
+        <input id="mnr-ing-qtd" type="number" placeholder="Qtd" step="0.1" style="padding:8px 10px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:13px;color:#1c1c1e;outline:none;width:100%">
+        <select id="mnr-ing-un" style="padding:8px 6px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:13px;color:#1c1c1e;outline:none;width:100%">
+          <option>g</option><option>kg</option><option>ml</option><option>L</option><option>un</option><option>pç</option><option>cx</option><option>pct</option><option>colher</option><option>xícara</option>
+        </select>
+        <button onclick="addIngModalReceita()" style="padding:8px;background:#FB5C32;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center">+</button>
+      </div>
+      <!-- Modo de preparo -->
+      <div style="font-size:12px;font-weight:600;color:#636366;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Modo de preparo</div>
+      <textarea id="mnr-modo" placeholder="Descreva o passo a passo..." rows="4"
+        style="width:100%;padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:13px;color:#1c1c1e;outline:none;resize:vertical;margin-bottom:10px;font-family:inherit"></textarea>
+      <!-- Link de vídeo -->
+      <div style="font-size:12px;font-weight:600;color:#636366;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Link de vídeo (opcional)</div>
+      <input id="mnr-video" placeholder="https://youtube.com/..." style="width:100%;padding:10px 12px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:8px;font-size:13px;color:#1c1c1e;outline:none;margin-bottom:16px">
+      <!-- Botões -->
+      <div style="display:flex;gap:8px">
+        <button onclick="fecharModalNovaReceita()" style="flex:1;padding:12px;border:1px solid #e5e5ea;border-radius:10px;background:#f2f2f7;font-size:14px;cursor:pointer">Cancelar</button>
+        <button onclick="salvarReceitaDoModal()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#FB5C32;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Salvar receita</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1560,15 +1624,27 @@ function abrirModalReceita(dia, ref, semana) {
   document.getElementById('modal-sel-sub').textContent = REFEICOES_LABEL[ref];
   const entry = cardapioSemana.find(c=>c.dia===dia&&c.refeicao===ref);
   document.getElementById('modal-porcoes').value = entry?.porcoes || 1;
-  document.getElementById('modal-receitas-opcoes').innerHTML = receitas.length ?
-    receitas.map(r=>`
+  document.getElementById('modal-busca-receita').value = '';
+  renderReceitasModal();
+  document.getElementById('modal-receita-sel').style.display = 'block';
+}
+
+function renderReceitasModal(filtro='') {
+  const filtradas = receitas.filter(r=>r.nome.toLowerCase().includes(filtro.toLowerCase()));
+  const entry = cardapioSemana.find(c=>c.dia===modalDia&&c.refeicao===modalRef);
+  document.getElementById('modal-receitas-opcoes').innerHTML = filtradas.length ?
+    filtradas.map(r=>`
       <div onclick="selecionarReceita('${r.id}')"
         style="padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:6px;background:${entry?.receita_id===r.id?'rgba(251,92,50,.1)':'#f2f2f7'};border:1px solid ${entry?.receita_id===r.id?'rgba(251,92,50,.4)':'#e5e5ea'}">
         <div style="font-weight:500;font-size:14px">${r.nome}</div>
-        <div style="font-size:12px;color:#8e8e93">${r.porcoes_padrao} porção${r.porcoes_padrao!==1?'ões':''} padrão · ${r.ingredientes?.length||0} ingredientes</div>
+        <div style="font-size:12px;color:#8e8e93">${r.porcoes_padrao} porção${r.porcoes_padrao!==1?'ões':''} · ${r.ingredientes?.length||0} ingredientes</div>
+        ${r.video_url?'<div style="font-size:11px;color:#FB5C32;margin-top:2px">🎥 Tem vídeo</div>':''}
       </div>`).join('') :
-    '<div style="text-align:center;padding:20px;color:#8e8e93;font-size:13px">Nenhuma receita cadastrada ainda</div>';
-  document.getElementById('modal-receita-sel').style.display = 'block';
+    '<div style="text-align:center;padding:20px;color:#8e8e93;font-size:13px">Nenhuma receita encontrada.<br>Toque em "+ Nova" para cadastrar.</div>';
+}
+
+function filtrarReceitasModal() {
+  renderReceitasModal(document.getElementById('modal-busca-receita').value);
 }
 
 async function selecionarReceita(receitaId) {
@@ -1590,6 +1666,56 @@ async function limparCelula() {
   renderSemana();
 }
 function fecharModalReceita() { document.getElementById('modal-receita-sel').style.display='none'; }
+
+// Nova receita a partir do modal do cardápio
+let ingModalTemp = [];
+function abrirNovaReceitaDoModal() {
+  ingModalTemp = [];
+  document.getElementById('mnr-nome').value = '';
+  document.getElementById('mnr-porcoes').value = '1';
+  document.getElementById('mnr-modo').value = '';
+  document.getElementById('mnr-video').value = '';
+  document.getElementById('mnr-ing-nome').value = '';
+  document.getElementById('mnr-ing-qtd').value = '';
+  renderIngModalTemp();
+  document.getElementById('modal-nova-receita').style.display = 'block';
+}
+function fecharModalNovaReceita() { document.getElementById('modal-nova-receita').style.display='none'; }
+
+function addIngModalReceita() {
+  const nome=document.getElementById('mnr-ing-nome').value.trim();
+  const qtd=parseFloat(document.getElementById('mnr-ing-qtd').value);
+  const un=document.getElementById('mnr-ing-un').value;
+  if(!nome||!qtd)return;
+  ingModalTemp.push({nome,quantidade:qtd,unidade:un,tmpId:Date.now()});
+  document.getElementById('mnr-ing-nome').value='';
+  document.getElementById('mnr-ing-qtd').value='';
+  renderIngModalTemp();
+  document.getElementById('mnr-ing-nome').focus();
+}
+function removerIngModal(tmpId) { ingModalTemp=ingModalTemp.filter(i=>i.tmpId!==tmpId); renderIngModalTemp(); }
+function renderIngModalTemp() {
+  document.getElementById('mnr-ing-list').innerHTML=ingModalTemp.map(i=>`
+    <div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid #f2f2f7;gap:8px">
+      <div style="flex:1;font-size:13px">${i.nome}</div>
+      <div style="font-size:13px;font-weight:500;color:#FB5C32">${i.quantidade}${i.unidade}</div>
+      <button onclick="removerIngModal(${i.tmpId})" style="background:none;border:none;color:#8e8e93;font-size:16px;cursor:pointer;padding:0 4px">×</button>
+    </div>`).join('');
+}
+async function salvarReceitaDoModal() {
+  const nome=document.getElementById('mnr-nome').value.trim();
+  if(!nome){alert('Informe o nome da receita.');return;}
+  const data={nome,porcoes_padrao:parseInt(document.getElementById('mnr-porcoes').value)||1,descricao:document.getElementById('mnr-modo').value,modo_preparo:document.getElementById('mnr-modo').value,video_url:document.getElementById('mnr-video').value.trim(),user_id:currentUser?.id};
+  const nova=await dbPost('receitas',data);
+  if(nova){
+    for(const ing of ingModalTemp) await dbPost('ingredientes_receita',{receita_id:nova.id,nome:ing.nome,quantidade:ing.quantidade,unidade:ing.unidade});
+    nova.ingredientes=[...ingModalTemp];
+    receitas.push(nova);
+    fecharModalNovaReceita();
+    renderReceitasModal(document.getElementById('modal-busca-receita').value);
+    renderReceitas();
+  }else{alert('Erro ao salvar. Verifique o Supabase.');}
+}
 
 // Gerar lista de compras
 async function gerarListaCompras() {
@@ -1705,7 +1831,8 @@ function renderReceitas() {
         <button onclick="excluirReceita('${rec.id}')" style="background:none;border:none;cursor:pointer;padding:5px;color:#8e8e93;font-size:16px"><i class="ti ti-x"></i></button>
       </div>
       <div id="rec-det-${rec.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #f2f2f7">
-        ${rec.descricao ? `<div style="font-size:13px;color:#636366;margin-bottom:8px">${rec.descricao}</div>` : ''}
+        ${rec.descricao ? `<div style="font-size:13px;color:#636366;margin-bottom:8px;line-height:1.5">${rec.descricao}</div>` : ''}
+        ${rec.video_url ? `<a href="${rec.video_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;font-size:13px;color:#FB5C32;margin-bottom:8px">🎥 Ver vídeo da receita</a><br>` : ''}
         ${rec.ingredientes.map(i=>`<div style="font-size:13px;padding:3px 0;color:#1c1c1e">• ${i.nome}: <strong>${i.quantidade}${i.unidade}</strong></div>`).join('')}
       </div>
     </div>`).join('');
@@ -1737,6 +1864,7 @@ function editarReceita(id) {
   document.getElementById('r-nome').value = rec.nome;
   document.getElementById('r-porcoes').value = rec.porcoes_padrao;
   document.getElementById('r-desc').value = rec.descricao||'';
+  if(document.getElementById('r-video')) document.getElementById('r-video').value = rec.video_url||'';
   document.getElementById('receita-form-title').textContent = 'Editar receita';
   document.getElementById('receita-form').style.display = 'block';
   renderIngredientesTemp();
@@ -1773,7 +1901,7 @@ function renderIngredientesTemp() {
 async function salvarReceita() {
   const nome = document.getElementById('r-nome').value.trim();
   if (!nome) { alert('Informe o nome da receita.'); return; }
-  const data = { nome, porcoes_padrao: parseInt(document.getElementById('r-porcoes').value)||1, descricao: document.getElementById('r-desc').value, user_id: currentUser?.id };
+  const data = { nome, porcoes_padrao: parseInt(document.getElementById('r-porcoes').value)||1, descricao: document.getElementById('r-desc').value, modo_preparo: document.getElementById('r-desc').value, video_url: document.getElementById('r-video')?.value?.trim()||'', user_id: currentUser?.id };
 
   if (editReceitaId) {
     await dbPatch('receitas', editReceitaId, data);
