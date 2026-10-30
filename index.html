@@ -1,4 +1,4 @@
-<!-- Solo App v1.3.1 - Cardápio: modal melhorado, busca de receitas, modo de preparo e link de vídeo -->
+<!-- Solo App v1.4.0 - Quantidade fracionada com vírgula (0,3 kg) -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -697,8 +697,11 @@ function showSubtab(id,el) {
 // ── COMPRAR ───────────────────────────────────────────────────────────
 function chgQtd(fieldId, delta) {
   const el=document.getElementById(fieldId);
-  el.value = Math.max(0.1, parseFloat(el.value||1)+delta).toFixed(delta===1&&parseFloat(el.value)>=1?0:1).replace(/\.0$/,'');
+  const cur=parseQtd(el.value);
+  const n=Math.max(0.1, Math.round((cur+delta)*1000)/1000);
+  el.value=String(n).replace('.',',');
 }
+function parseQtd(v){const n=parseFloat(String(v==null||v===''?'1':v).replace(',','.'));return n>0?n:1;}
 
 function updateTotal() {
   const t = cart.reduce((s,i)=>s+i.subtotal,0);
@@ -716,8 +719,8 @@ function addItem(pre=null) {
   const tamanho = pre?.tamanho||document.getElementById('c-tamanho').value;
   const unidade = pre?.unidade||document.getElementById('c-unidade').value;
   const preco = parseBRL(pre?.preco||document.getElementById('c-preco').value);
-  const qtd = parseFloat(pre?.qtd||document.getElementById('c-qtd').value)||1;
-  cart.push({id:++cartCtr,nome,marca,tamanho,unidade,preco,qtd,subtotal:preco*qtd});
+  const qtd = parseQtd(pre?.qtd||document.getElementById('c-qtd').value);
+  cart.push({id:++cartCtr,nome,marca,tamanho,unidade,preco,qtd,subtotal:Math.round(preco*qtd*100)/100});
   if(!pre){['c-nome','c-marca','c-tamanho'].forEach(id=>document.getElementById(id).value='');clearPrice('c-preco');document.getElementById('c-qtd').value='1';document.getElementById('c-unidade').value='';}
   document.getElementById('tip-box').style.display='none';
   updateTotal();
@@ -780,7 +783,7 @@ function editCartItem(id) {
   document.getElementById('e-tamanho').value=item.tamanho||'';
   document.getElementById('e-unidade').value=item.unidade||'';
   document.getElementById('e-preco').value=item.preco.toLocaleString('pt-BR',{minimumFractionDigits:2});
-  document.getElementById('e-qtd').value=item.qtd;
+  document.getElementById('e-qtd').value=String(item.qtd).replace('.',',');
   document.getElementById('edit-form').style.display='block';
   document.getElementById('edit-form').scrollIntoView({behavior:'smooth'});
 }
@@ -791,8 +794,8 @@ function salvarEdit() {
   item.tamanho=document.getElementById('e-tamanho').value;
   item.unidade=document.getElementById('e-unidade').value;
   item.preco=parseBRL(document.getElementById('e-preco').value);
-  item.qtd=parseFloat(document.getElementById('e-qtd').value)||1;
-  item.subtotal=item.preco*item.qtd;
+  item.qtd=parseQtd(document.getElementById('e-qtd').value);
+  item.subtotal=Math.round(item.preco*item.qtd*100)/100;
   cancelEdit(); updateTotal();
 }
 function cancelEdit(){editCartId=null;document.getElementById('edit-form').style.display='none';}
