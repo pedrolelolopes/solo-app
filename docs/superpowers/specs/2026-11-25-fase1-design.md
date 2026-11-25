@@ -11,9 +11,9 @@ Fase 1 quer: anotar mais rápido (texto e voz), nunca esquecer o que é urgente 
 1. **Entrada rápida de itens na lista**, por texto e por voz. Exemplo: andando em casa, o Pedro fala "papel higiênico" e o item entra na lista.
 2. **Lista única de próxima compra**, com itens de duas origens: *anotada* (o Pedro disse) e *sugerida* (o app previu que acaba). O Pedro pode tirar um item ou adiar para a próxima ida ao mercado.
 3. **Produto com dados mínimos**, marcados uma vez por produto: *urgência* (prazo: até amanhã, até uma semana ou sem pressa; padrão sem pressa) e *essencial* (sim ou não).
-4. **Aviso diário por notificação no iPhone, por volta das 16h**, só com os itens urgentes. "Sem pressa" nunca notifica.
+4. **Aviso diário por notificação no iPhone, por volta das 16h do Amazonas (17h de Brasília)**, só com os itens urgentes. "Sem pressa" nunca notifica.
 5. **Duração por produto.** Cada compra é um lote com data de início. O lote fecha quando o Pedro toca "acabou" (a compra inteira, não unidade por unidade). O app calcula dias de duração e custo por dia. Até haver dados reais, vale uma estimativa dada pelo Pedro.
-6. **Planejado x comprado.** Ao entrar no mercado, o que está na lista é *planejado*. O que o Pedro adiciona lá dentro e é essencial é *esquecido essencial*. O que adiciona lá dentro e não é essencial é *impulso*. No fim da compra o app mostra quanto foi gasto em cada um.
+6. **Planejado x comprado, sem botão de iniciar compra.** Na compra, o app mostra a lista do que precisa comprar. Item comprado que estava na lista é *planejado*. Quando o Pedro coloca algo que não estava na lista, o app pergunta "essencial ou supérfluo?": essencial vira *esquecido essencial*, supérfluo vira *impulso*. No "Confirmar compra" que já existe, o app mostra quanto foi gasto em cada grupo.
 7. **Nomes de produto.** Ao digitar, o app sugere o produto que já existe (ignora maiúscula e acento) e o Pedro toca para confirmar. Só na primeira vez de um nome novo o app pergunta "é o mesmo que X?" e depois lembra.
 8. **Compra rápida no mercado:** só nome, preço e quantidade são necessários; marca, unidade e porção são opcionais. Item de peso variável: o Pedro informa preço por kg e peso em gramas e o app calcula o valor (ex.: tomate R$ 18/kg, 634 g).
 
@@ -34,8 +34,9 @@ Fase 1 quer: anotar mais rápido (texto e voz), nunca esquecer o que é urgente 
 - Vercel Hobby só roda tarefa agendada **1 vez por dia, com até 1 hora de imprecisão**. Por isso o aviso é diário "por volta das 16h" e não em tempo real.
 - **iPhone só recebe notificação com o app instalado na tela inicial** (PWA). O Pedro instala pelo Compartilhar → Adicionar à Tela de Início.
 - Supabase gratuito pausa o projeto após 1 semana com pouca atividade. A tarefa diária deve manter atividade (a confirmar).
-- Hoje o login é só por nome digitado e a chave pública do Supabase está no código. **Não se sabe se o Row Level Security está ativo.** A função `/api/claude` aceita pedidos de qualquer origem, sem autenticação. A fase 1 não pode aumentar esse risco, e a entrada por atalho precisa de um código secreto.
-- Uso pessoal (a Vercel Hobby é para uso não comercial).
+- Hoje o login é só por nome digitado e a chave pública do Supabase está no código. **Não se sabe se o Row Level Security está ativo.** A função `/api/claude` aceita pedidos de qualquer origem, sem autenticação. A entrada por atalho precisa de um código secreto.
+- **O app será compartilhado com pessoas da família.** Por isso a segurança vem antes das novidades (decisão do Pedro, ver abaixo): login de verdade, cada pessoa só vê os próprios dados.
+- Uso pessoal e familiar, sem fins comerciais (compatível com a Vercel Hobby).
 
 ## Abordagens consideradas e escolhas do Pedro
 - **Estrutura do app:** A) evoluir o `index.html` único (rápido, arquivo cresce e quebra fácil); **B) reorganizar em arquivos por tela, manter Supabase e Vercel (escolhida)**; C) reescrever com servidor Python próprio (mais controle, mas servidor pago ou que dorme; descartada por ora). Migrar B para C depois exige reescrever só o "envelope" das funções de servidor; telas e dados não mudam.
@@ -44,15 +45,17 @@ Fase 1 quer: anotar mais rápido (texto e voz), nunca esquecer o que é urgente 
 - **Aviso:** notificação no iPhone desde a fase 1 (não só dentro do app).
 - **"Acabou":** por compra inteira.
 - **Nomes:** o app sugere, o Pedro confirma.
+- **Segurança primeiro (opção A):** antes das novidades, conferir o Row Level Security, trancar o banco, criar login de verdade e fechar `/api/claude`. As telas atuais passam a falar com o servidor ou com o banco já protegido. O Pedro tem acesso ao painel do Supabase e aplica os comandos SQL; o construtor entrega o passo a passo na hora de fazer.
+- **Planejado x impulso sem botão:** a pergunta "essencial ou supérfluo?" aparece para o que não estava na lista.
 
 ## Escolhas minhas (o Pedro pode mudar)
 - A urgência vira um **prazo por item**, e o item sugerido entra na lista na data prevista de fim **menos** o prazo (urgente: 1 dia antes; uma semana: 7 dias antes; sem pressa: no dia previsto, sem aviso).
 - Item de peso variável e campo "local" (mercado, farmácia, açougue) entram na fase 1 por serem pequenos e fazerem parte do "mercado rápido".
 - Produto novo: urgência "sem pressa" e essencial "não" até o Pedro marcar.
 - Manter os dados existentes; o novo modelo convive com as tabelas atuais. As telas antigas (receitas, cardápio, histórico) continuam funcionando contra as tabelas velhas. A lista nova é uma tabela nova, ao lado de `lista_hoje`/`lista_permanente`. O histórico antigo (`itens_compra`) é importado como lotes de duração quando der.
-- **Planejado x impulso** usa botões explícitos "Iniciar compra" e "Finalizar compra" (a tabela `sessoes_compra` já existe). Item adiado volta na próxima compra iniciada e mantém urgência e essencial.
+- **Fim da compra:** reaproveita o diálogo "Confirmar compra" e a tabela `sessoes_compra`, que já existem. Item adiado volta na próxima compra e mantém urgência e essencial. A resposta "essencial ou supérfluo?" fica guardada no produto e só é perguntada de novo se o produto ainda não tiver marca (o Pedro pode editar depois).
 - **Previsão de duração:** vale a estimativa do Pedro até haver 2 lotes fechados; depois, a média dos últimos 3 lotes, em dias por unidade (quantidade comprada normaliza a duração). Custo por dia = preço da compra ÷ dias do lote.
-- **Aviso:** a tarefa diária roda sempre, mesmo sem item urgente (mantém o Supabase ativo). Horário de Brasília (UTC-3); agendar às 19:00 UTC, que na Vercel Hobby cai entre 16h e 17h.
+- **Aviso:** a tarefa diária roda sempre, mesmo sem item urgente (mantém o Supabase ativo). Horário do Amazonas (UTC-4); agendar às 20:00 UTC, que na Vercel Hobby cai entre 16h e 17h do Amazonas (17h e 18h de Brasília). Horário único para todos na fase 1.
 - **Atalho do iPhone:** token longo e trocável guardado dentro do atalho. Aceito para uso pessoal.
 - **Sugestão de nome:** roda no navegador. Ignora maiúscula e acento. Sugere quando o texto digitado compartilha palavras com um produto existente (ex.: "leite 0" sugere "Leite sem lactose"). A pergunta "é o mesmo que X?" só aparece na primeira vez que o nome é novo.
 
@@ -61,3 +64,4 @@ Fase 1 quer: anotar mais rápido (texto e voz), nunca esquecer o que é urgente 
 - Layout das telas, no estilo do app atual.
 - Como garantir o código secreto do atalho e a proteção mínima dos dados (RLS e/ou login), respeitando as restrições acima.
 - Como gerar e guardar as chaves de notificação e o cadastro do aparelho.
+- Como migrar os usuários atuais (login por nome) para login de verdade sem perder dados, e qual método de login usar (e-mail, link por e-mail etc.), pensando em familiares.
