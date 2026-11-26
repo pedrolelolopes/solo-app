@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Folhetos salvos no banco (aparecem no celular e no PC), lidos de várias fotos, PDF ou de um CSV gerado por um script de pasta, com comparativo que diz claramente se vale ir a outro mercado; e corrigir os bugs pendentes da Parte 1 (IA em markdown cru, `ai()` inexistente, g x kg, botão "Buscar opiniões").
+**Goal:** Folhetos salvos no banco (aparecem no celular e no PC), lidos de várias fotos, PDF ou de um CSV gerado pelo Claude Code a partir de uma pasta, com comparativo que diz claramente se vale ir a outro mercado; e corrigir os bugs pendentes da Parte 1 (IA em markdown cru, `ai()` inexistente, g x kg, botão "Buscar opiniões").
 
-**Architecture:** Lógica pura em módulos testáveis em `js/` (mesmo formato de `js/auth.js`: `module.exports` no Node, `window.<Nome>` no navegador, sem build). A IA só **lê** (folheto → linhas `nome|preço|unidade`) e **casa nomes** (lista × folheto → JSON curto); totais, economia e a nota final são calculados no navegador por regra fixa e testada. Duas tabelas novas (`folhetos`, `comparativos`) com `owner_id` e RLS por dono, criadas pelo Pedro no SQL Editor. O script de pasta (`scripts/folhetos_pasta.py`) gera um CSV que o app importa pela própria tela (com o login do Pedro; sem token novo).
+**Architecture:** Lógica pura em módulos testáveis em `js/` (mesmo formato de `js/auth.js`: `module.exports` no Node, `window.<Nome>` no navegador, sem build). A IA só **lê** foto/PDF de última hora (folheto → linhas `nome|preço|unidade`); totais, economia e a nota final são calculados no navegador por regra fixa e testada. Duas tabelas novas (`folhetos`, `comparativos`) com `owner_id` e RLS por dono, criadas pelo Pedro no SQL Editor. O Claude Code lê a pasta de folhetos e escreve um CSV (conferido por `scripts/folhetos_csv.py`, sem IA) que o app importa pela própria tela (com o login do Pedro; sem token novo). O casamento lista × folheto é feito sem IA; a IA só entra, por botão, para o que sobrar.
 
 **Tech Stack:** HTML/JS sem framework, Supabase (Postgres + RLS, plano gratuito), Vercel Hobby (função Python `/api/claude`), Python 3 só biblioteca padrão, testes `node --test tests/` e `python -m pytest tests/`.
 
@@ -22,16 +22,16 @@
 
 ## Escolhas deste plano (o Pedro pode mudar na revisão)
 1. **Nome do mercado:** o botão "Adicionar fotos/PDF" fica desligado até haver nome, com o texto "Digite o nome do mercado primeiro". O CSV traz o nome do mercado no próprio arquivo e não exige o campo.
-2. **Nota final (regra fixa):** custo de deslocamento **R$ 10**, mínimo **5 itens**, item caro **R$ 20** de economia. Valores em constantes no topo de `js/folhetos.js`.
-3. **Formato do script:** **CSV com `;`** (`mercado;produto;preco;unidade`). Motivo: menor arquivo, abre no Excel e no celular, o Pedro corrige à mão; `;` é o separador do Excel em português e evita conflito com a vírgula do preço. JSON é menos editável; MD é ambíguo de ler.
-4. **Onde fica o script:** `scripts/` do repositório, não `C:\dev\scripts\utilidades\`. Motivo: o CSV é um contrato com o app; script, leitor do app e testes mudam juntos. A regra do núcleo permite "o repo do app".
-5. **Envio do CSV ao app:** o Pedro importa pela tela Folhetos (botão "Importar CSV"), já logado. O arquivo chega ao celular por Drive/WhatsApp para si mesmo. Envio automático com token longo fica para a Parte 3.
-6. **Imagens não são guardadas** no banco: só os itens extraídos (economiza o espaço gratuito).
-7. **Modelos:** leitura do folheto continua em `claude-sonnet-4-6` (precisão); casamento de nomes do comparativo passa a `claude-haiku-4-5-20251001` com resposta JSON curta (mais rápido e barato). Lentidão de ~10 s por foto é aceita.
+2. **Nota final mostra a margem (decisão do Pedro, 2026-11-26):** sempre diz quanto se economiza em cada outro mercado, em três níveis pela economia total: abaixo de **R$ 5** → "tanto faz"; de R$ 5 a R$ 29,99 → o usuário decide ("Compensa se o deslocamento não for grande"); **R$ 30 ou mais** → "Vale a pena!". Limites em constantes no topo de `js/folhetos.js`.
+3. **Formato:** **CSV com `;`** (`mercado;produto;preco;unidade`). Motivo: menor arquivo, abre no Excel e no celular, o Pedro corrige à mão; `;` é o separador do Excel em português e evita conflito com a vírgula do preço. (OK do Pedro.)
+4. **Caminho principal da pasta (decisão do Pedro):** o **Claude Code** lê a pasta de imagens/PDFs e escreve o CSV (assinatura, sem custo de API). O repositório guarda o prompt pronto e um validador local do CSV em `scripts/` (sem IA). Foto/PDF direto no app fica para folheto de última hora.
+5. **Envio do CSV ao app:** o Pedro importa pela tela Folhetos (botão "Importar CSV"), já logado. O arquivo chega ao celular por Drive/WhatsApp para si mesmo. Envio automático com token longo fica para a Parte 3. (OK do Pedro.)
+6. **Imagens não são guardadas** no banco: só os itens extraídos. (OK do Pedro.)
+7. **Sempre o modelo mais barato (decisão do Pedro):** toda chamada tocada neste plano usa `claude-haiku-4-5-20251001` (constante `MODELO_BARATO` em `js/ia.js`). Antes de implementar, conferir no preço oficial da Anthropic se `claude-haiku-5-5` é mais barato; se for, a constante passa a ele. **Comparação sem IA:** o casamento lista × folheto é feito no navegador por palavras (Task 5, `casarLocal`); a IA só é chamada, por botão, para os itens que sobrarem sem par.
 
 ## Custos (estimativa, não verificada em fatura)
-- Leitura de 1 foto/página com Sonnet: cerca de US$ 0,02. Comparativo com Haiku: menos de US$ 0,01.
-- Script de pasta: mesmo custo por imagem, cobrado na chave do Pedro. **Alternativa grátis:** pedir ao Claude Code (assinatura) para ler a pasta e escrever o CSV no formato de `docs/folhetos/formato-csv.md` (Task 8).
+- Leitura de 1 foto/página no app com Haiku: menos de US$ 0,01. Comparativo: R$ 0 quando todos os itens casam sem IA.
+- Pasta lida pelo Claude Code: sem custo de API (usa a cota da assinatura).
 
 ## Review Focus
 1. Uma de 5 fotos falha (ilegível ou rede): as outras 4 entram e são salvas; aviso diz qual falhou (Task 6, teste `processarArquivos continua após falha`).
@@ -47,8 +47,8 @@
 - Create `js/ia.js` — montar conteúdo (imagem/PDF) e chamar `/api/claude`
 - Create `js/folhetos.js` — regras puras: normalizar, ler linhas da IA, ler CSV, juntar itens, comparativo e nota final
 - Create `js/tela-folhetos.js` — tela Folhetos (DOM + banco); primeiro arquivo "por tela" do spec
-- Create `scripts/folhetos_pasta.py`, `docs/folhetos/formato-csv.md`
-- Create tests: `tests/texto-seguro.test.js`, `tests/unidades.test.js`, `tests/ia.test.js`, `tests/folhetos.test.js`, `tests/tela-folhetos.test.js`, `tests/test_folhetos_pasta.py`
+- Create `scripts/folhetos_csv.py` (validador sem IA), `docs/folhetos/ler-pasta-com-claude-code.md` (prompt pronto)
+- Create tests: `tests/texto-seguro.test.js`, `tests/unidades.test.js`, `tests/ia.test.js`, `tests/folhetos.test.js`, `tests/tela-folhetos.test.js`, `tests/test_folhetos_csv.py`
 - Modify `index.html` (tela Folhetos 280-297 e funções 969-1006; `ai()` em ~832 e ~1188; `comparar()` 946-967; `getDica()` 858-869; `buscarOpiniao()` 1352-1372), `api/claude.py`, `tests/test_claude_api.py`, `js/auth.js`, `js/db.js` e seus testes, `docs/seguranca/guia-pedro.md`
 
 ---
@@ -128,6 +128,7 @@ git commit -m "feat: tabelas folhetos e comparativos com RLS por dono"
 
 **Interfaces:**
 - Produces em `js/ia.js`:
+  - `MODELO_BARATO = 'claude-haiku-4-5-20251001'` (ver escolha 7). `getDica`, dica do `comparar`, `buscarOpiniao`, foto de preço, cupom e folheto passam a usar `MODELO_BARATO`. Receitas e cardápio não mudam neste plano.
   - `LIMITE_PDF_BYTES = 2_900_000` (base64 cabe nos 4 MB).
   - `validarArquivo(file: {type: string, size: number}): string | null` — erro em português ou `null`. Aceita `image/*` e `application/pdf`; PDF acima do limite → "PDF grande demais (máx. 2,9 MB). Divida em partes."; outro tipo → "Tipo de arquivo não aceito.".
   - `montarConteudo(prompt: string, b64: string, mime: string): object[]` — imagem → `{type:'image', source:{type:'base64', media_type:'image/jpeg', data}}` (a foto já sai JPEG de `toB64`); PDF → `{type:'document', source:{type:'base64', media_type:'application/pdf', data}}`; depois `{type:'text', text: prompt}`.
@@ -151,17 +152,20 @@ git commit -m "feat: tabelas folhetos e comparativos com RLS por dono"
 
 **Interfaces:**
 - Produces `window.Folhetos`:
-  - Constantes: `CUSTO_DESLOCAMENTO = 10`, `MIN_ITENS = 5`, `ECONOMIA_ITEM_CARO = 20`.
+  - Constantes: `ECONOMIA_MINIMA = 5`, `ECONOMIA_FORTE = 30`.
+  - `casarLocal(lista: {nome:string}[], folhetos: {id, mercado, itens}[]): { pares: [iLista, iFolheto, iItem][], semPar: number[] }` — sem IA. Palavras = `normalizar(nome)` dividido por espaço, sem palavras de até 2 letras e sem números/unidades (`1kg`, `500g`, `2l`). Casa quando **todas** as palavras do item da lista aparecem no nome do item do folheto (ex.: "leite" casa "Leite Integral Itambé 1L"; "leite sem lactose" não casa "Leite Integral"). `semPar` = índices da lista sem nenhum par em nenhum folheto.
   - `PROMPT_LEITURA: string` — exato: `"Folheto de supermercado. Liste TODOS os produtos com preço, um por linha, no formato: nome|preço|unidade. Preço com ponto decimal, sem R$. Unidade: kg, g, L, ml, un ou vazio. Sem cabeçalho, sem texto extra."`
   - `normalizar(s: string): string` — minúsculas, sem acento, espaços únicos, sem espaço nas pontas.
   - `lerLinhasIA(texto: string): Item[]` — aceita `nome|preço|unidade`; preço com `,` ou `.` e com ou sem `R$`; ignora linhas sem preço > 0; unidade vazia → `null`.
   - `lerCsv(texto: string): { porMercado: Record<string, Item[]>, ignoradas: number }` — tira BOM; exige cabeçalho `mercado;produto;preco;unidade` (aceita `,` como separador se o cabeçalho usar `,`); mercado vazio ou preço inválido → conta em `ignoradas`.
   - `juntarItens(a: Item[], b: Item[]): Item[]` — remove repetidos com mesmo `normalizar(nome)`, `preco` e `unidade`; mantém a ordem.
   - `calcularComparativo(lista: {nome:string}[], folhetos: {id, mercado, itens}[], pares: [iLista, iFolheto, iItem][]): Resultado` onde `Resultado = { linhas: {item: string, precos: Record<mercado, number>}[], totais: Record<mercado, {total: number, encontrados: number}>, base: string, recomendacoes: {mercado, itens: string[], economia: number}[], soEm: Record<mercado, string[]>, nota: string }`. Pares inválidos (índice fora) são ignorados; com dois preços do mesmo mercado para um item, vale o menor.
-  - Regra da nota: `base` = mercado com mais itens da lista encontrados (empate: menor total). Para cada outro mercado M: itens onde M é mais barato que `base`; `economia` = soma das diferenças. M é recomendado se (`itens ≥ MIN_ITENS` **ou** algum item com diferença ≥ `ECONOMIA_ITEM_CARO`) **e** `economia > CUSTO_DESLOCAMENTO`. `soEm` = itens achados só em um mercado.
-  - Texto exato de `nota`:
-    - sem recomendação: `"Tanto faz: compre tudo no {base}. Ir a outro mercado economizaria no máximo {fmt(maior economia)}, que não paga o deslocamento (R$ 10,00)."` (se nenhum outro mercado tiver economia: `"Compre tudo no {base}."`)
-    - com recomendação: `"Compre no {base} e vá também ao {M}: {n} itens, economia de {fmt(economia)} (deslocamento de R$ 10,00 já considerado)."` — uma frase por mercado recomendado.
+  - Regra da nota: `base` = mercado com mais itens da lista encontrados (empate: menor total). Para cada outro mercado M: itens onde M é mais barato que `base`; `economia` = soma das diferenças. `recomendacoes` = mercados com `economia ≥ ECONOMIA_MINIMA`, da maior para a menor economia. `soEm` = itens achados só em um mercado.
+  - Texto exato de `nota` (uma frase por linha, `\n` entre elas):
+    - 1ª linha sempre: `"Base: {base}."`
+    - para cada M em `recomendacoes` com economia ≥ `ECONOMIA_FORTE`: `"No {M} você terá {fmt(economia)} de economia ({n} itens). Vale a pena!"`
+    - para cada M com economia entre `ECONOMIA_MINIMA` e `ECONOMIA_FORTE`: `"No {M} você terá {fmt(economia)} de economia total ({n} itens). Compensa se o deslocamento não for grande."`
+    - sem recomendação: `"Tanto faz: compre tudo no {base}."` e, se houver alguma economia > 0, acrescentar `" Outro mercado economizaria só {fmt(maior economia)}."`
     - `fmt` = `R$ 0,00` em pt-BR.
 - `Item = {nome: string, preco: number, unidade: string|null}`.
 
@@ -171,11 +175,13 @@ git commit -m "feat: tabelas folhetos e comparativos com RLS por dono"
   - `lerCsv` com BOM, 2 mercados e 1 linha ruim → 2 chaves e `ignoradas: 1`
   - `lerCsv` com cabeçalho errado → `porMercado` vazio e `ignoradas` = nº de linhas
   - `juntarItens` remove repetido "Leite"/"leite" com mesmo preço e mantém o de preço diferente
-  - `calcularComparativo tanto faz`: 2 mercados, 3 itens com R$ 1 de diferença cada → `recomendacoes` vazio e `nota` começa com `"Tanto faz: compre tudo no"`
-  - `calcularComparativo recomenda com 5 itens`: 5 itens com R$ 3 de diferença (economia R$ 15) → recomenda o outro mercado, nota exata
-  - `calcularComparativo recomenda item caro`: 1 item com R$ 25 de diferença → recomenda
-  - `calcularComparativo não recomenda economia abaixo do deslocamento`: 6 itens com R$ 1 → não recomenda
+  - `calcularComparativo tanto faz`: 2 mercados, 3 itens com R$ 1 de diferença cada (R$ 3) → `recomendacoes` vazio e nota `"Base: A.\nTanto faz: compre tudo no A. Outro mercado economizaria só R$ 3,00."`
+  - `calcularComparativo usuário decide`: economia R$ 10 em 4 itens → linha `"No B você terá R$ 10,00 de economia total (4 itens). Compensa se o deslocamento não for grande."`
+  - `calcularComparativo vale a pena`: economia R$ 50 → linha `"No B você terá R$ 50,00 de economia (… itens). Vale a pena!"`
+  - `calcularComparativo limite`: economia exata R$ 5,00 → recomenda; R$ 4,99 → não; R$ 30,00 → "Vale a pena!"
   - `calcularComparativo ignora par inválido` e lista `soEm`
+  - `casarLocal casa por palavras`: lista `["Leite", "Leite sem lactose", "Café"]`, folheto `["Leite Integral Itambé 1L", "Leite Sem Lactose Piracanjuba 1L", "Açúcar 5kg"]` → "Leite" casa os dois leites, "Leite sem lactose" só o 2º, "Café" vai para `semPar`
+  - `casarLocal ignora números e unidades` ("Arroz 5kg" casa "ARROZ TIO JOÃO 5 KG")
 - [ ] **Step 2:** `node --test tests/folhetos.test.js` → falha.
 - [ ] **Step 3: Implementar.**
 - [ ] **Step 4:** `node --test tests/` → passa.
@@ -197,7 +203,7 @@ git commit -m "feat: tabelas folhetos e comparativos com RLS por dono"
   - Cartão de cada folheto: mercado (escapado), "N itens · dd/mm", botões "+ páginas" e remover (com `confirm`). Toque no cartão mostra os itens.
   - `abrir()` carrega `dbGet('folhetos','order=criado_em.desc')` e o último `comparativos` (`order=criado_em.desc&limit=1`), mostrando a nota dele.
   - Falha ao gravar no banco: avisa "Não salvei no banco. Toque em Salvar para tentar de novo." e mantém o folheto na tela marcado "não salvo" com botão Salvar.
-  - `comparar()`: manda à IA (`claude-haiku-4-5-20251001`, `max_tokens` 1500) a lista permanente numerada e os itens de cada folheto numerados; pede **só** JSON `{"pares":[[iLista,iFolheto,iItem],...]}` (um par por item da lista e mercado em que o produto é o mesmo ou equivalente; tamanhos diferentes não casam). Lê com `extractJSON`, calcula com `calcularComparativo`, mostra tabela (item × mercado, menor preço em destaque), totais, "Só no X" e a nota; salva em `comparativos`.
+  - `comparar()`: **sem IA** primeiro: `casarLocal` → `calcularComparativo` → mostra tabela (item × mercado, menor preço em destaque), totais, "Só no X" e a nota (cada linha da nota em parágrafo próprio, "Vale a pena!" em destaque); salva em `comparativos`. Se `semPar` não estiver vazio, mostra "{n} itens não encontrados" e o botão **"Procurar com IA"**: manda à IA (`MODELO_BARATO`, `max_tokens` 1500) só esses itens da lista e os itens dos folhetos, numerados, pedindo **só** JSON `{"pares":[[iLista,iFolheto,iItem],...]}` (produto igual ou equivalente; tamanhos diferentes não casam); junta aos pares locais, recalcula e atualiza o comparativo salvo.
 - [ ] **Step 1: Testes** (`tests/tela-folhetos.test.js`, com `db`, `ia`, `toB64` e `doc` falsos — só lógica, sem DOM real; `doc` pode ser um objeto mínimo com `getElementById` que devolve `{innerHTML:'', style:{}, ...}`):
   - `processarArquivos continua após falha` (3 arquivos, o 2º lança) → `lidos: 2`, `falhas: ['<nome do 2º>']`, 1 `dbPost` e 1 `dbPatch`
   - `processarArquivos recusa PDF grande sem chamar a IA`
@@ -205,10 +211,12 @@ git commit -m "feat: tabelas folhetos e comparativos com RLS por dono"
   - `adicionarPaginas relê antes de gravar` (o `dbGet` devolve itens novos de outro aparelho; o `dbPatch` contém os dois)
   - `importarCsv cria um folheto por mercado` e devolve `ignoradas`
   - `comparar salva em comparativos` com `nota` igual à de `calcularComparativo`
+  - `comparar não chama a IA quando todos casam` (ia falsa conta 0 chamadas)
+  - `Procurar com IA manda só os itens sem par`
   - `nome com <script> aparece escapado no cartão`
 - [ ] **Step 2:** rodar → falha.
 - [ ] **Step 3: Implementar** `js/tela-folhetos.js` e trocar o HTML/JS antigo no `index.html`.
-- [ ] **Step 4:** `node --test tests/` → passa; `grep -n "folhetos=\[\]\|capture=\"environment\".*fol-" index.html` → nenhuma linha.
+- [ ] **Step 4:** `node --test tests/` → passa; `grep -n "folhetos=\[\]\|capture="environment".*fol-" index.html` → nenhuma linha.
 - [ ] **Step 5: Teste manual local** (`python -m http.server 8000`; a IA só funciona em produção, então aqui testar CSV, salvar, remover e a regra do botão desligado). Registrar em `docs/folhetos/teste-manual.md`.
 - [ ] **Step 6: Commit:** `feat: folhetos com varias fotos, PDF, CSV e salvos no banco`.
 
@@ -226,26 +234,25 @@ git commit -m "feat: tabelas folhetos e comparativos com RLS por dono"
 - [ ] **Step 4:** `node --test tests/` → passa.
 - [ ] **Step 5: Commit:** `fix: renovacao de token unica e id codificado`.
 
-### Task 8: Script de pasta (`scripts/folhetos_pasta.py`)
+### Task 8: Pasta de folhetos lida pelo Claude Code + validador do CSV
+
+Caminho principal do Pedro: ele abre o Claude Code, cola o prompt pronto com o caminho da pasta, e o Claude Code lê as imagens/PDFs (sem custo de API) e escreve o CSV. O validador local (sem IA) confere e arruma o arquivo antes de ir ao app.
 
 **Files:**
-- Create: `scripts/folhetos_pasta.py`, `tests/test_folhetos_pasta.py`, `docs/folhetos/formato-csv.md`
+- Create: `scripts/folhetos_csv.py`, `tests/test_folhetos_csv.py`, `docs/folhetos/ler-pasta-com-claude-code.md`
 
 **Interfaces:**
-- Produces em `scripts/folhetos_pasta.py` (só biblioteca padrão):
-  - `EXTENSOES = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}`; `LIMITE_BYTES = 5_000_000` (imagem) e `LIMITE_PDF_BYTES = 30_000_000`.
-  - `PROMPT_LEITURA` — **mesmo texto** de `Folhetos.PROMPT_LEITURA` (Task 5).
-  - `listar_arquivos(pasta: Path) -> list[Path]` — só as extensões aceitas, em ordem de nome.
-  - `ler_linhas_ia(texto: str) -> list[dict]` — mesmas regras de `lerLinhasIA`.
-  - `ler_arquivo(caminho: Path, chave: str, modelo: str = "claude-sonnet-4-6", abrir=urllib.request.urlopen) -> tuple[list[dict], bool]` — envia a imagem/PDF a `https://api.anthropic.com/v1/messages` (`max_tokens` 4000; local, fora do teto do app), devolve itens e `cortado`.
-  - `escrever_csv(itens_por_mercado: dict[str, list[dict]], saida: Path) -> int` — UTF-8 com BOM, `;`, cabeçalho `mercado;produto;preco;unidade`, preço com vírgula; devolve nº de linhas.
-  - Linha de comando: `python scripts/folhetos_pasta.py <pasta> [--mercado NOME] [--saida ARQ]`. Mercado padrão = nome da pasta; saída padrão `<pasta>/folheto.csv`. Lê `ANTHROPIC_API_KEY` do ambiente (sem ela: mensagem "Defina ANTHROPIC_API_KEY no ambiente" e sai com código 2). Mostra progresso e, no fim, linhas gravadas, arquivos com falha e custo estimado (US$ 0,02 × arquivos).
-- `docs/folhetos/formato-csv.md`: formato, exemplo de 3 linhas fictícias, como enviar ao app (salvar no Drive ou mandar no WhatsApp para si → app → Folhetos → **Importar CSV**), como definir a chave só no PC do Pedro (PowerShell: `[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "<cole aqui>", "User")`, digitado por ele, nunca salvo em arquivo) e a alternativa grátis (pedir ao Claude Code para ler a pasta e escrever o CSV neste formato).
-- [ ] **Step 1: Testes** (`tests/test_folhetos_pasta.py`): `test_listar_ignora_outros_tipos`; `test_ler_linhas_ia` (mesmo caso da Task 5); `test_escrever_csv_bom_e_virgula` (lê o arquivo: começa com BOM, `22,90`); `test_ler_arquivo_monta_document_para_pdf` (opener falso captura o corpo e confere `type: "document"`); `test_sem_chave_sai_com_2`; `test_prompt_igual_ao_js` (lê `js/folhetos.js` e confere que contém `PROMPT_LEITURA` do Python).
-- [ ] **Step 2:** `python -m pytest tests/test_folhetos_pasta.py -v` → falha.
+- Produces em `scripts/folhetos_csv.py` (só biblioteca padrão, sem rede):
+  - `ler_csv(texto: str) -> tuple[list[dict], list[str]]` — mesmas regras de `Folhetos.lerCsv` (Task 5); devolve itens `{mercado, produto, preco: float, unidade: str|None}` e mensagens de erro por linha (`"linha 7: preço inválido"`).
+  - `limpar(itens: list[dict]) -> list[dict]` — tira repetidos (mesmo mercado, `produto` normalizado sem acento/maiúscula, preço e unidade) e espaços sobrando.
+  - `escrever_csv(itens: list[dict], saida: Path) -> int` — UTF-8 com BOM, `;`, cabeçalho `mercado;produto;preco;unidade`, preço com vírgula (`22,90`); devolve nº de linhas.
+  - Linha de comando: `python scripts/folhetos_csv.py <arquivo.csv>` — valida, limpa, regrava no mesmo arquivo (cópia do original em `<arquivo>.bak` na primeira vez) e imprime `"{n} itens em {m} mercados; {e} linhas com erro"` + as linhas com erro. Sai com código 1 se nenhuma linha for válida.
+- `docs/folhetos/ler-pasta-com-claude-code.md`: (1) formato do CSV com exemplo de 3 linhas fictícias; (2) **prompt pronto para colar** no Claude Code: ler todas as imagens/PDFs de `<pasta>` (uma por vez, páginas do PDF com `Read(pages=...)`), usar o nome da pasta como mercado se o Pedro não disser outro, extrair todos os produtos com preço, escrever `<pasta>\folheto.csv` no formato, rodar `python C:\dev\solo-app\scripts\folhetos_csv.py <pasta>\folheto.csv` e mostrar o resumo; (3) como levar ao app: salvar no Drive ou mandar no WhatsApp para si → app → **Folhetos** → **Importar CSV**. Sem chave de API em lugar nenhum.
+- [ ] **Step 1: Testes** (`tests/test_folhetos_csv.py`): `test_ler_csv_bom_e_virgula_decimal`; `test_ler_csv_aceita_virgula_como_separador_se_cabecalho_usar`; `test_ler_csv_aponta_linha_ruim` (`"linha 3: preço inválido"`); `test_limpar_remove_repetido_com_acento` ("Pão" e "pao", mesmo preço → 1); `test_escrever_csv_bom_e_virgula` (arquivo começa com BOM e contém `22,90`); `test_cli_sem_linhas_validas_sai_com_1`; `test_mesmo_resultado_que_js` (o CSV de exemplo de `docs/folhetos/ler-pasta-com-claude-code.md` dá o mesmo número de itens em `ler_csv` e no teste `lerCsv` da Task 5 — usar o mesmo texto de exemplo nos dois testes).
+- [ ] **Step 2:** `python -m pytest tests/test_folhetos_csv.py -v` → falha.
 - [ ] **Step 3: Implementar** script e doc.
-- [ ] **Step 4:** `python -m pytest tests/ -v` → tudo passa. Teste do CSV no app: importar o CSV gerado pelo teste na tela local (Task 6).
-- [ ] **Step 5: Commit:** `feat: script que le pasta de folhetos e gera CSV para o app`.
+- [ ] **Step 4:** `python -m pytest tests/ -v` → tudo passa. Importar o CSV de exemplo na tela local (Task 6) e ver o folheto criado.
+- [ ] **Step 5: Commit:** `feat: validador do CSV de folhetos e prompt para o Claude Code ler a pasta`.
 
 ### Task 9: Publicar e verificar (com o Pedro)
 
@@ -256,7 +263,7 @@ git commit -m "feat: tabelas folhetos e comparativos com RLS por dono"
 - [ ] **Step 2:** `python scripts/verificar_anonimo.py` com `folhetos` e `comparativos` acrescentadas à lista de tabelas do script → `True` em todas.
 - [ ] **Step 3:** pedir OK do Pedro → `git push -u origin parte2a`. Preview da Vercel não tem chave de IA: lá testar só CSV, salvar e remover.
 - [ ] **Step 4:** pedir OK explícito para o merge → `git switch main`, `git merge parte2a`, `git push`. Esperar o deploy.
-- [ ] **Step 5: Pedro testa no celular e depois no PC:** (a) 3 fotos da galeria de uma vez; (b) 1 PDF; (c) "+ páginas" num folheto existente; (d) importar o CSV do script; (e) o folheto aparece no PC; (f) comparativo com nota final; (g) dica 💡 e "Buscar opiniões" sem `###` nem `**`; (h) foto de preço e cupom funcionando; (i) comparar 500 g × 1 kg.
+- [ ] **Step 5: Pedro testa no celular e depois no PC:** (a) 3 fotos da galeria de uma vez; (b) 1 PDF; (c) "+ páginas" num folheto existente; (d) pedir ao Claude Code para ler uma pasta de teste e importar o CSV; (e) o folheto aparece no PC; (f) comparativo com nota final; (g) dica 💡 e "Buscar opiniões" sem `###` nem `**`; (h) foto de preço e cupom funcionando; (i) comparar 500 g × 1 kg.
 - [ ] **Step 6:** registrar em `docs/folhetos/verificacao.md` (sem dados reais), commit, push com OK, e seção nova em `C:\CLAUDE\curto-prazo\solo-app.md` com os comandos do núcleo.
 
 ---
@@ -273,10 +280,14 @@ PWA, notificações, tarefa diária, atalho do iPhone e envio direto do script a
 - Compartilhar receitas, listas e itens entre perfis (ex.: Pedro e Aline).
 - Dicas, opiniões e "achados" de preço compartilhados (ex.: "Fulano achou tomate por R$ 10 no mercado Zé").
 
+### Menos IA com o tempo (pedido do Pedro)
+- Ler preço da foto sem IA (OCR no navegador, ex.: Tesseract.js, grátis): avaliar numa parte futura; pesa no celular e erra mais que a IA em etiqueta.
+- Dicionário de apelidos aprendido: quando a IA casa um item que `casarLocal` não casou, guardar o par ("café" → "Café Pilão 500g") para casar sem IA da próxima vez. Natural na Parte 2b, junto com os apelidos de `produto`.
+
 ### Achados da revisão que ficam de fora
 Teto de uso por usuário no `/api/claude` (Parte 3, junto com o token longo); checar referências entre tabelas no RLS (2b, com as tabelas novas); aviso de offline na tela de login; SQL 01 idempotente (já rodado, sem efeito agora).
 
 ## Self-review
-- **Cobertura do brief:** A1 nome do mercado (Task 6 + escolha 1); A2 galeria e PDF (Tasks 4, 6); A3 várias fotos e editar (Task 6); A4 salvar no banco (Tasks 1, 6, 9); A5 markdown (Task 2); A6 nota final (Task 5); A7 custo/tempo (escolha 7, comparativo em JSON com Haiku); B script e formato (Task 8 + escolhas 3-5); C itens antigos (Tasks 2, 3, 4, 7 e lista de fora); D ideias (seção acima).
+- **Cobertura do brief:** A1 nome do mercado (Task 6 + escolha 1); A2 galeria e PDF (Tasks 4, 6); A3 várias fotos e editar (Task 6); A4 salvar no banco (Tasks 1, 6, 9); A5 markdown (Task 2); A6 nota final (Task 5); A7 custo/tempo (escolha 7: modelo mais barato e comparação sem IA); B pasta lida pelo Claude Code + validador e formato (Task 8 + escolhas 3-5); C itens antigos (Tasks 2, 3, 4, 7 e lista de fora); D ideias (seção acima).
 - **Tipos:** `Item`, `claudeArquivo`, `validarArquivo`, `calcularComparativo`, `PROMPT_LEITURA` têm o mesmo nome e forma onde são produzidos e consumidos.
 - **Proporção:** 9 tarefas; código só como assinaturas, testes e textos exatos. Se a execução quiser dividir, Tasks 1-4 e 7 são independentes de 5-6-8.
