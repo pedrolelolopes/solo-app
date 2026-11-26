@@ -10,3 +10,23 @@ Regra: nunca cole senha nem chave aqui. Se não achar um menu, procure pelo nome
 5. Backup: **Database → Backups** (se não achar: "Backups"). Veja o que o plano gratuito oferece.
 6. Garantia: **Table Editor** → clique na tabela → **Export → Export table as CSV**. Faça nas 9 tabelas e salve em `G:\Meu Drive\PESSOAL-HUB\` (nunca no repositório).
 7. Avise na conversa: "backup no Drive".
+
+## 2. Contas (Supabase Auth)
+1. Supabase → **Authentication** → **Users** → **Add user** → **Create new user**.
+2. Digite o e-mail e escolha uma senha (nunca escreva a senha na conversa).
+3. Marque **Auto Confirm User** → **Create user**.
+4. Repita para cada pessoa da família que vai usar.
+5. Em cada conta, copie o **User UID** (aparece na lista de Users). Cole na conversa, dizendo de quem é.
+6. Desligar cadastro aberto: **Authentication** → **Sign In / Providers** (ou **Providers**) → **Email** → desligue **Allow new users to sign up** → **Save**.
+   Sem isso, qualquer pessoa cria conta e gasta a chave da Anthropic.
+7. Diga na conversa: para cada nome antigo em `usuarios`, de qual conta ele é.
+
+## 3. Variáveis da Vercel
+Faça isto ANTES do merge.
+1. vercel.com → projeto **solo-app** → **Settings** → **Environment Variables**.
+2. Adicione (marque **Production** e **Preview**):
+   - `SUPABASE_URL` = a URL de `js/config.js` (começa com `https://nafgdjbjojdfnejiecgu`)
+   - `SUPABASE_ANON_KEY` = a chave pública `sb_publishable_...` de `js/config.js`
+   - `ALLOWED_ORIGIN` = `https://solo-app-nu.vercel.app`
+3. `ANTHROPIC_API_KEY` já existe: não mexa.
+4. Se pedir, **Redeploy** só depois do merge.
