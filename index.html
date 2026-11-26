@@ -1277,8 +1277,6 @@ async function verCompra(id) {
 
 // ── LOGIN ─────────────────────────────────────────────────────────────
 function mostrarLogin(msg) {
-  // limpa tudo que ficou na memoria da pessoa anterior (evita ver dados de outra conta)
-  cart = []; lista = []; hojeList = []; folhetos = []; receitas = []; cardapioSemana = []; ingredientesTemp = [];
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('main-app').style.display = 'none';
   const e = document.getElementById('login-erro');
@@ -1302,7 +1300,13 @@ async function fazerLogin() {
   const r = await auth.signIn(email, senha);
   if (!r.ok) { mostrarLogin(r.erro); return; }
   document.getElementById('login-senha').value = '';
-  if (jaEntrou) { location.reload(); return; } // sessao ja salva; a pagina limpa entra sozinha
+  if (jaEntrou && currentUser && currentUser.id === r.usuario.id) {
+    // mesma pessoa voltando depois de a sessao expirar: mantem o carrinho aberto
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'block';
+    return;
+  }
+  if (jaEntrou) { location.reload(); return; } // outra conta: recarrega e limpa a tela da anterior
   await entrarNoApp(r.usuario);
 }
 
