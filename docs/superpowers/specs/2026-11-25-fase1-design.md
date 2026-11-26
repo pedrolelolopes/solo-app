@@ -22,6 +22,7 @@ Fase 1 quer: anotar mais rápido (texto e voz), nunca esquecer o que é urgente 
 - Integração com o app de finanças (gasto diário x gasto do mercado, relatório diário). Fica para a fase 2.
 - Relatório de gasto por categoria (% leite, carne, chocolate). Fase 2. O campo *essencial* já é guardado agora para ele.
 - Controle por unidade consumida (marcar cada refrigerante tomado).
+- Listas compartilhadas entre pessoas (convites, permissões). Na fase 1 cada pessoa da família tem a própria conta e os próprios dados.
 - Lista "falta em casa" separada. Compras para a casa da mãe: o Pedro não registra.
 
 ## O que seria fracasso (anti-objetivos)
@@ -46,6 +47,7 @@ Fase 1 quer: anotar mais rápido (texto e voz), nunca esquecer o que é urgente 
 - **"Acabou":** por compra inteira.
 - **Nomes:** o app sugere, o Pedro confirma.
 - **Segurança primeiro (opção A):** antes das novidades, conferir o Row Level Security, trancar o banco, criar login de verdade e fechar `/api/claude`. As telas atuais passam a falar com o servidor ou com o banco já protegido. O Pedro tem acesso ao painel do Supabase e aplica os comandos SQL; o construtor entrega o passo a passo na hora de fazer.
+- **Família com listas individuais (opção A):** cada pessoa tem login próprio e só vê os próprios dados (produtos, lotes, lista, aviso no próprio aparelho).
 - **Planejado x impulso sem botão:** a pergunta "essencial ou supérfluo?" aparece para o que não estava na lista.
 
 ## Escolhas minhas (o Pedro pode mudar)
