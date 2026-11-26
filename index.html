@@ -96,8 +96,10 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
     </div>
     <div style="background:#fff;border-radius:16px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,.08)">
       <div style="font-size:16px;font-weight:600;margin-bottom:4px">Bem-vindo!</div>
-      <div style="font-size:13px;color:#8e8e93;margin-bottom:20px">Digite seu nome para entrar</div>
-      <input id="login-nome" placeholder="Seu nome" style="width:100%;padding:12px 14px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:10px;font-size:16px;color:#1c1c1e;outline:none;margin-bottom:12px" onkeydown="if(event.key==='Enter')fazerLogin()">
+      <div style="font-size:13px;color:#8e8e93;margin-bottom:20px">Entre com seu e-mail e senha</div>
+      <input id="login-email" type="email" autocomplete="username" placeholder="E-mail" style="width:100%;padding:12px 14px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:10px;font-size:16px;color:#1c1c1e;outline:none;margin-bottom:12px">
+      <input id="login-senha" type="password" autocomplete="current-password" placeholder="Senha" style="width:100%;padding:12px 14px;background:#f2f2f7;border:1px solid #e5e5ea;border-radius:10px;font-size:16px;color:#1c1c1e;outline:none;margin-bottom:12px" onkeydown="if(event.key==='Enter')fazerLogin()">
+      <div id="login-erro" style="display:none;color:#d70015;font-size:13px;margin-bottom:12px"></div>
       <button onclick="fazerLogin()" style="width:100%;background:#FB5C32;color:#fff;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:600;cursor:pointer">Entrar</button>
     </div>
   </div>
@@ -534,41 +536,19 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 </div><!-- /content -->
 </div><!-- /app -->
 
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/db.js"></script>
 <script>
-// ── CONFIG ────────────────────────────────────────────────────────────
-const SB = 'https://nafgdjbjojdfnejiecgu.supabase.co';
-const SK = 'sb_publishable_ttZwJ6mFrmtFllS886HZ3Q_1rtfYm-5';
-const SH = { 'Content-Type':'application/json', 'apikey':SK, 'Authorization':`Bearer ${SK}` };
-
-// ── SUPABASE ─────────────────────────────────────────────────────────
-async function dbGet(t, qs='') {
-  try {
-    const r = await fetch(`${SB}/rest/v1/${t}?${qs}`, { headers: SH });
-    if (!r.ok) { const e = await r.text(); console.error('dbGet error', t, r.status, e); return []; }
-    return await r.json();
-  } catch(e) { console.error('dbGet catch', t, e); return []; }
-}
-async function dbPost(t, data) {
-  try {
-    const r = await fetch(`${SB}/rest/v1/${t}`, {
-      method:'POST', headers:{...SH,'Prefer':'return=representation'}, body:JSON.stringify(data)
-    });
-    if (!r.ok) return null;
-    const d = await r.json(); return Array.isArray(d) ? d[0] : d;
-  } catch { return null; }
-}
-async function dbPatch(t, id, data) {
-  try {
-    const r = await fetch(`${SB}/rest/v1/${t}?id=eq.${id}`, {
-      method:'PATCH', headers:{...SH,'Prefer':'return=representation'}, body:JSON.stringify(data)
-    });
-    if (!r.ok) return null;
-    const d = await r.json(); return Array.isArray(d) ? d[0] : d;
-  } catch { return null; }
-}
-async function dbDel(t, id) {
-  try { await fetch(`${SB}/rest/v1/${t}?id=eq.${id}`, { method:'DELETE', headers:SH }); } catch {}
-}
+// ── CONFIG / LOGIN / BANCO (módulos em js/) ───────────────────────────
+const auth = SoloAuth.createAuth({
+  url: SOLO_CONFIG.url, anonKey: SOLO_CONFIG.anonKey, storage: localStorage,
+  fetchFn: (...a) => fetch(...a), agora: () => Math.floor(Date.now() / 1000)
+});
+const { dbGet, dbPost, dbPatch, dbDel, claudeFetch } = SoloDb.createDb({
+  url: SOLO_CONFIG.url, anonKey: SOLO_CONFIG.anonKey,
+  getToken: () => auth.getAccessToken(), fetchFn: (...a) => fetch(...a)
+});
 
 // ── CLAUDE ───────────────────────────────────────────────────────────
 function extractJSON(text) {
@@ -591,39 +571,33 @@ function extractJSON(text) {
 
 async function claudeImg(prompt, b64, mime, model='claude-sonnet-4-6') {
   try {
-    const r = await fetch('/api/claude', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
+    const r = await claudeFetch({
         model, // sonnet para cupom (complexo), haiku para etiqueta (simples)
         max_tokens:1500,
         messages:[{role:'user',content:[
           {type:'image',source:{type:'base64',media_type:mime,data:b64}},
           {type:'text',text:prompt}
         ]}]
-      })
     });
     if (!r.ok) { const e=await r.json(); throw new Error(e.error?.message||'Erro HTTP '+r.status); }
     const d = await r.json();
     if (d.error) throw new Error(d.error.message);
     return d.content?.map(b=>b.text||'').join('')||'';
-  } catch(e) { console.error('claudeImg erro:',e); throw e; }
+  } catch(e) { console.error('claudeImg erro:',e); if (e.message==='sessao-expirada') mostrarLogin('Sua sessão expirou. Entre de novo.'); throw e; }
 }
 
 async function claudeText(prompt, maxTk=400) {
   try {
-    const r = await fetch('/api/claude', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
+    const r = await claudeFetch({
         model:'claude-sonnet-4-6',
         max_tokens:maxTk,
         messages:[{role:'user',content:prompt}]
-      })
     });
     if (!r.ok) { const e=await r.json(); throw new Error(e.error?.message||'Erro HTTP '+r.status); }
     const d = await r.json();
     if (d.error) throw new Error(d.error.message);
     return d.content?.map(b=>b.text||'').join('')||'';
-  } catch(e) { console.error('claudeText erro:',e); return ''; }
+  } catch(e) { console.error('claudeText erro:',e); if (e.message==='sessao-expirada') mostrarLogin('Sua sessão expirou. Entre de novo.'); return ''; }
 }
 
 async function toB64(file) {
@@ -664,13 +638,13 @@ async function init() {
 
 async function loadLista() {
   if(!currentUser)return;
-  const r = await dbGet('lista_permanente','select=*&order=nome.asc&user_id=eq.'+encodeURIComponent(currentUser.id));
+  const r = await dbGet('lista_permanente','select=*&order=nome.asc');
   lista = Array.isArray(r) ? r : [];
 }
 async function loadHoje() {
   if (!currentUser) return;
   // Query simples sem JOIN para evitar falha com lista_id NULL
-  const r = await dbGet('lista_hoje', 'select=*&done=eq.false&order=created_at.asc&user_id=eq.' + encodeURIComponent(currentUser.id));
+  const r = await dbGet('lista_hoje', 'select=*&done=eq.false&order=created_at.asc');
   hojeList = Array.isArray(r) ? r : [];
 }
 
@@ -923,7 +897,7 @@ async function confirmarCompra() {
 
   const total = comprados.reduce((s, i) => s + i.subtotal, 0);
   const mercado = document.getElementById('c-mercado').value || 'Supermercado';
-  const sessao = await dbPost('sessoes_compra', { mercado, data: new Date().toISOString().split('T')[0], total, user_id: currentUser?.id });
+  const sessao = await dbPost('sessoes_compra', { mercado, data: new Date().toISOString().split('T')[0], total });
 
   if (sessao) {
     for (const item of comprados) {
@@ -934,7 +908,7 @@ async function confirmarCompra() {
     for (const item of naoComprados) {
       const tmpId = 'tmp-' + Date.now() + Math.random();
       hojeList.push({ id: tmpId, nome: item.nome, detalhe: [item.marca, (item.tamanho || '') + (item.unidade || '')].filter(Boolean).join(' · '), done: false });
-      dbPost('lista_hoje', { nome: item.nome, detalhe: [item.marca, (item.tamanho || '') + (item.unidade || '')].filter(Boolean).join(' · '), done: false, user_id: currentUser?.id });
+      dbPost('lista_hoje', { nome: item.nome, detalhe: [item.marca, (item.tamanho || '') + (item.unidade || '')].filter(Boolean).join(' · '), done: false });
     }
 
     cart = [];
@@ -1044,7 +1018,7 @@ async function selecionarAC(listaId) {
   document.getElementById('hoje-input').value='';
   document.getElementById('ac-box').style.display='none';
   renderHoje(); renderQueue();
-  const novo=await dbPost('lista_hoje',{nome:item.nome,detalhe,lista_id:listaId,done:false,user_id:currentUser?.id});
+  const novo=await dbPost('lista_hoje',{nome:item.nome,detalhe,lista_id:listaId,done:false});
   if(novo){const idx=hojeList.findIndex(i=>i.id===tmpId);if(idx!==-1)hojeList[idx]={...novo,lista_permanente:item};}
 }
 async function addHoje() {
@@ -1058,7 +1032,7 @@ async function addHoje() {
   document.getElementById('hoje-input').value='';
   renderHoje(); renderQueue();
   // Sincroniza com Supabase em segundo plano
-  const novo=await dbPost('lista_hoje',{nome,detalhe:'',done:false,user_id:currentUser?.id});
+  const novo=await dbPost('lista_hoje',{nome,detalhe:'',done:false});
   if(novo){const idx=hojeList.findIndex(i=>i.id===tmpId);if(idx!==-1)hojeList[idx]=novo;}
   trackFreqHoje(nome);
 }
@@ -1161,7 +1135,7 @@ function abrirAddFixo() {
 function fecharAddFixo(){document.getElementById('fixo-form').style.display='none';editFixoId=null;}
 async function salvarFixo() {
   const nome=document.getElementById('f-nome').value.trim(); if(!nome)return;
-  const data={nome,marca:document.getElementById('f-marca').value,tamanho:document.getElementById('f-tamanho').value,unidade:document.getElementById('f-unidade').value,obs:document.getElementById('f-obs').value,compro_sempre:document.getElementById('f-sempre').checked,user_id:currentUser?.id};
+  const data={nome,marca:document.getElementById('f-marca').value,tamanho:document.getElementById('f-tamanho').value,unidade:document.getElementById('f-unidade').value,obs:document.getElementById('f-obs').value,compro_sempre:document.getElementById('f-sempre').checked};
   if(editFixoId){
     await dbPatch('lista_permanente',editFixoId,data);
     lista=lista.map(i=>i.id===editFixoId?{...i,...data}:i);
@@ -1233,7 +1207,7 @@ Responda APENAS com array JSON, sem nenhum texto antes ou depois:
 async function salvarCupom() {
   const mercado=document.getElementById('cup-mercado').value.trim()||'Supermercado';
   const total=cupomItems.reduce((s,i)=>s+i.preco*(i.qtd||1),0);
-  const sessao=await dbPost('sessoes_compra',{mercado,data:new Date().toISOString().split('T')[0],total,user_id:currentUser?.id});
+  const sessao=await dbPost('sessoes_compra',{mercado,data:new Date().toISOString().split('T')[0],total});
   if(sessao){
     for(const item of cupomItems){
       await dbPost('itens_compra',{sessao_id:sessao.id,nome:item.nome,preco:item.preco,qtd:item.qtd||1,subtotal:item.preco*(item.qtd||1)});
@@ -1249,7 +1223,7 @@ async function renderHistorico() {
   if(!hl)return;
   hd.style.display='none'; hl.style.display='block';
   hl.innerHTML='<div class="empty"><i class="ti ti-loader"></i><p>Carregando...</p></div>';
-  const sessoes=await dbGet('sessoes_compra','select=*&order=created_at.desc&limit=30&user_id=eq.'+encodeURIComponent(currentUser?.id||''));
+  const sessoes=await dbGet('sessoes_compra','select=*&order=created_at.desc&limit=30');
   if(!sessoes.length){
     hl.innerHTML='<div class="empty"><i class="ti ti-receipt"></i><p>Nenhuma compra registrada ainda</p></div>';
     return;
@@ -1301,60 +1275,46 @@ async function verCompra(id) {
 
 
 // ── LOGIN ─────────────────────────────────────────────────────────────
-async function fazerLogin() {
-  const nomeRaw = document.getElementById('login-nome').value.trim();
-  if (!nomeRaw) { alert('Digite seu nome para entrar.'); return; }
+function mostrarLogin(msg) {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('main-app').style.display = 'none';
+  const e = document.getElementById('login-erro');
+  e.textContent = msg || ''; e.style.display = msg ? 'block' : 'none';
+}
 
-  // Normaliza nome
-  const nomeDisplay = nomeRaw.replace(/\s+/g,' ').split(' ')
-    .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
-  // ID: nome completo em minúsculo, espaços preservados (ex: "pedro lopes")
-  const nomeKey = nomeDisplay.toLowerCase().trim();
-
-  // Usa nomeKey como ID estável — não depende de UUID do Supabase
-  const user = { id: nomeKey, nome: nomeDisplay };
-
-  // Registra na tabela usuarios em segundo plano (não crítico)
-  dbPost('usuarios', { nome: nomeDisplay, nome_key: nomeKey }).catch(() => {});
-
-  currentUser = user;
-  localStorage.setItem('solo-user', JSON.stringify(user));
+async function entrarNoApp(usuario) {
+  currentUser = { id: usuario.id, nome: usuario.email, email: usuario.email };
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
-  document.getElementById('user-badge').textContent = '👤 ' + user.nome;
+  document.getElementById('user-badge').textContent = '👤 ' + usuario.email;
   await init();
 }
 
+async function fazerLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  if (!email || !senha) { mostrarLogin('Digite e-mail e senha.'); return; }
+  const r = await auth.signIn(email, senha);
+  if (!r.ok) { mostrarLogin(r.erro); return; }
+  document.getElementById('login-senha').value = '';
+  await entrarNoApp(r.usuario);
+}
+
 function trocarUsuario() {
-  if (!confirm('Trocar de usuário? Sua sessão atual será encerrada.')) return;
+  if (!confirm('Sair da conta?')) return;
+  auth.signOut();
   currentUser = null;
-  localStorage.removeItem('solo-user');
   cart = []; lista = []; hojeList = [];
-  document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('main-app').style.display = 'none';
-  document.getElementById('login-nome').value = '';
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-senha').value = '';
+  mostrarLogin();
 }
 
 async function checkAutoLogin() {
-  const saved = localStorage.getItem('solo-user');
-  if (saved) {
-    try {
-      const stored = JSON.parse(saved);
-      if (stored.nome) {
-        // Sempre renormaliza o ID — corrige formatos antigos (pedro-lopes → pedro)
-        const nomeDisplay = stored.nome;
-        const nomeKey = nomeDisplay.toLowerCase().trim();
-        currentUser = { id: nomeKey, nome: nomeDisplay };
-        localStorage.setItem('solo-user', JSON.stringify(currentUser));
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('main-app').style.display = 'block';
-        document.getElementById('user-badge').textContent = '👤 ' + currentUser.nome;
-        await init();
-        return;
-      }
-    } catch {}
-  }
-  document.getElementById('login-screen').style.display = 'flex';
+  localStorage.removeItem('solo-user'); // limpeza do login antigo (por nome)
+  const u = auth.getUsuario();
+  if (u && await auth.getAccessToken()) { await entrarNoApp(u); return; }
+  mostrarLogin();
 }
 
 // ── PRICE FIELD UTILITIES ─────────────────────────────────────────────
@@ -1379,11 +1339,11 @@ async function buscarOpiniao(){
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i>Buscando...';
   document.getElementById('opiniao-box').style.display='none';
   try{
-    const r=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    const r=await claudeFetch({
       model:'claude-sonnet-4-6',max_tokens:600,
       tools:[{type:'web_search_20250305',name:'web_search'}],
       messages:[{role:'user',content:'Pesquise opiniões sobre o produto "'+nome+'". Responda em português com: qualidade geral (nota /10), principais prós, principais contras, e conclusão se vale comprar. Seja objetivo e direto, máximo 8 linhas.'}]
-    })});
+    });
     if(!r.ok){const e=await r.json();throw new Error(e.error?.message||'Erro '+r.status);}
     const d=await r.json();
     if(d.error)throw new Error(d.error.message);
@@ -1490,14 +1450,10 @@ Identifique a intenção e responda SOMENTE com JSON válido:
 Resposta em português brasileiro, curta e natural. Preço em reais com vírgula.`;
 
   try {
-    const r = await fetch('/api/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const r = await claudeFetch({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 200,
         messages: [{ role: 'user', content: prompt }]
-      })
     });
     const d = await r.json();
     const txt = d.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
@@ -1593,7 +1549,7 @@ async function renderSemana() {
   const semanaStr = seg.toISOString().split('T')[0];
 
   // Carrega cardápio da semana
-  const rows = await dbGet('cardapio', `semana=eq.${semanaStr}&user_id=eq.${encodeURIComponent(currentUser?.id||'')}&select=*`);
+  const rows = await dbGet('cardapio', `semana=eq.${semanaStr}&select=*`);
   cardapioSemana = Array.isArray(rows) ? rows : [];
 
   // Carrega receitas se necessário
@@ -1656,7 +1612,7 @@ async function selecionarReceita(receitaId) {
   if (existing) {
     await dbPatch('cardapio', existing.id, { receita_id: receitaId, porcoes });
   } else {
-    await dbPost('cardapio', { semana: modalSemana, dia: modalDia, refeicao: modalRef, receita_id: receitaId, porcoes, user_id: currentUser?.id });
+    await dbPost('cardapio', { semana: modalSemana, dia: modalDia, refeicao: modalRef, receita_id: receitaId, porcoes });
   }
   fecharModalReceita();
   renderSemana();
@@ -1708,7 +1664,7 @@ function renderIngModalTemp() {
 async function salvarReceitaDoModal() {
   const nome=document.getElementById('mnr-nome').value.trim();
   if(!nome){alert('Informe o nome da receita.');return;}
-  const data={nome,porcoes_padrao:parseInt(document.getElementById('mnr-porcoes').value)||1,descricao:document.getElementById('mnr-modo').value,modo_preparo:document.getElementById('mnr-modo').value,video_url:document.getElementById('mnr-video').value.trim(),user_id:currentUser?.id};
+  const data={nome,porcoes_padrao:parseInt(document.getElementById('mnr-porcoes').value)||1,descricao:document.getElementById('mnr-modo').value,modo_preparo:document.getElementById('mnr-modo').value,video_url:document.getElementById('mnr-video').value.trim()};
   const nova=await dbPost('receitas',data);
   if(nova){
     for(const ing of ingModalTemp) await dbPost('ingredientes_receita',{receita_id:nova.id,nome:ing.nome,quantidade:ing.quantidade,unidade:ing.unidade});
@@ -1785,7 +1741,7 @@ async function gerarListaCompras() {
     const detalhe = `${item.qtd}${item.un} — cardápio semana`;
     const tmpId = 'tmp-' + Date.now() + Math.random();
     hojeList.push({ id: tmpId, nome: item.nome, detalhe, done: false });
-    dbPost('lista_hoje', { nome: item.nome, detalhe, done: false, user_id: currentUser?.id });
+    dbPost('lista_hoje', { nome: item.nome, detalhe, done: false });
     adicionados++;
   }
 
@@ -1804,7 +1760,7 @@ async function gerarListaCompras() {
 
 // ── RECEITAS ──────────────────────────────────────────────────────────
 async function loadReceitas() {
-  const r = await dbGet('receitas', `select=*&user_id=eq.${encodeURIComponent(currentUser?.id||'')}&order=nome.asc`);
+  const r = await dbGet('receitas', `select=*&order=nome.asc`);
   const lista_r = Array.isArray(r) ? r : [];
   // Carrega ingredientes de cada receita
   for (const rec of lista_r) {
@@ -1904,7 +1860,7 @@ function renderIngredientesTemp() {
 async function salvarReceita() {
   const nome = document.getElementById('r-nome').value.trim();
   if (!nome) { alert('Informe o nome da receita.'); return; }
-  const data = { nome, porcoes_padrao: parseInt(document.getElementById('r-porcoes').value)||1, descricao: document.getElementById('r-desc').value, modo_preparo: document.getElementById('r-desc').value, video_url: document.getElementById('r-video')?.value?.trim()||'', user_id: currentUser?.id };
+  const data = { nome, porcoes_padrao: parseInt(document.getElementById('r-porcoes').value)||1, descricao: document.getElementById('r-desc').value, modo_preparo: document.getElementById('r-desc').value, video_url: document.getElementById('r-video')?.value?.trim()||'' };
 
   if (editReceitaId) {
     await dbPatch('receitas', editReceitaId, data);
