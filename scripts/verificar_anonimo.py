@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 
 TABELAS = [
-    "usuarios", "lista_permanente", "lista_hoje", "frequencia", "sessoes_compra",
+    "folhetos", "lista_permanente", "lista_hoje", "frequencia", "sessoes_compra",
     "itens_compra", "cardapio", "receitas", "ingredientes_receita",
 ]
 
