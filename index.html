@@ -1285,7 +1285,9 @@ function mostrarLogin(msg) {
   e.textContent = msg || ''; e.style.display = msg ? 'block' : 'none';
 }
 
+let jaEntrou = false; // se ja houve alguem logado nesta pagina, recarrega ao trocar de conta (limpa a tela)
 async function entrarNoApp(usuario) {
+  jaEntrou = true;
   currentUser = { id: usuario.id, nome: usuario.email, email: usuario.email };
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
@@ -1300,6 +1302,7 @@ async function fazerLogin() {
   const r = await auth.signIn(email, senha);
   if (!r.ok) { mostrarLogin(r.erro); return; }
   document.getElementById('login-senha').value = '';
+  if (jaEntrou) { location.reload(); return; } // sessao ja salva; a pagina limpa entra sozinha
   await entrarNoApp(r.usuario);
 }
 
