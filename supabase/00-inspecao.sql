@@ -2,7 +2,7 @@
 -- Resultado em varias abas: use as abas "Results" do editor (a ultima consulta aparece primeiro).
 -- Para juntar tudo numa saida so, este script devolve UMA tabela com secao/detalhe.
 
-with t(nome) as (values ('usuarios'),('lista_permanente'),('lista_hoje'),('frequencia'),
+with t(nome) as (values ('lista_permanente'),('lista_hoje'),('frequencia'),
   ('sessoes_compra'),('itens_compra'),('cardapio'),('receitas'),('ingredientes_receita'))
 select '1-colunas' as secao, c.table_name || '.' || c.column_name || ' : ' || c.data_type
        || coalesce(' default ' || c.column_default, '') as detalhe
@@ -21,13 +21,10 @@ from pg_tables where schemaname = 'public'
 union all
 select '4-politicas', tablename || ' : ' || policyname || ' (' || cmd || ')'
 from pg_policies where schemaname = 'public'
-union all
-select '5-usuarios (APAGUE antes de colar no repo)', nome_key || ' / ' || coalesce(nome, '')
-from public.usuarios
 order by 1, 2;
 
 -- Contagem de linhas (rode separado, se quiser):
--- select 'usuarios' t, count(*) from public.usuarios union all select 'lista_permanente', count(*) from public.lista_permanente
+-- select 'lista_permanente' t, count(*) from public.lista_permanente
 -- union all select 'lista_hoje', count(*) from public.lista_hoje union all select 'frequencia', count(*) from public.frequencia
 -- union all select 'sessoes_compra', count(*) from public.sessoes_compra union all select 'itens_compra', count(*) from public.itens_compra
 -- union all select 'cardapio', count(*) from public.cardapio union all select 'receitas', count(*) from public.receitas
