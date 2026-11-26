@@ -1277,6 +1277,8 @@ async function verCompra(id) {
 
 // ── LOGIN ─────────────────────────────────────────────────────────────
 function mostrarLogin(msg) {
+  // limpa tudo que ficou na memoria da pessoa anterior (evita ver dados de outra conta)
+  cart = []; lista = []; hojeList = []; folhetos = []; receitas = []; cardapioSemana = []; ingredientesTemp = [];
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('main-app').style.display = 'none';
   const e = document.getElementById('login-erro');
@@ -1305,7 +1307,6 @@ function trocarUsuario() {
   if (!confirm('Sair da conta?')) return;
   auth.signOut();
   currentUser = null;
-  cart = []; lista = []; hojeList = [];
   document.getElementById('login-email').value = '';
   document.getElementById('login-senha').value = '';
   mostrarLogin();
