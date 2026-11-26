@@ -548,7 +548,8 @@ const auth = SoloAuth.createAuth({
 });
 const { dbGet, dbPost, dbPatch, dbDel, claudeFetch } = SoloDb.createDb({
   url: SOLO_CONFIG.url, anonKey: SOLO_CONFIG.anonKey,
-  getToken: () => auth.getAccessToken(), fetchFn: (...a) => fetch(...a)
+  getToken: () => auth.getAccessToken(), fetchFn: (...a) => fetch(...a),
+  onExpirada: () => mostrarLogin('Sua sessão expirou. Entre de novo (seu carrinho continua aberto).')
 });
 
 // ── CLAUDE ───────────────────────────────────────────────────────────
@@ -576,7 +577,7 @@ async function claudeImg(prompt, b64, mime, model='claude-sonnet-4-6') {
         model, // sonnet para cupom (complexo), haiku para etiqueta (simples)
         max_tokens:1500,
         messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:mime,data:b64}},
+          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
           {type:'text',text:prompt}
         ]}]
     });
@@ -602,12 +603,19 @@ async function claudeText(prompt, maxTk=400) {
 }
 
 async function toB64(file) {
-  return new Promise((res,rej)=>{
+  // reduz a foto (lado maior 1568 px, JPEG) para caber no limite do servidor (~4 MB)
+  const url = await new Promise((res,rej)=>{
     const r = new FileReader();
-    r.onload = () => res(r.result.split(',')[1]);
-    r.onerror = rej;
-    r.readAsDataURL(file);
+    r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file);
   });
+  try {
+    const img = await new Promise((res,rej)=>{ const i = new Image(); i.onload = ()=>res(i); i.onerror = rej; i.src = url; });
+    const esc = Math.min(1, 1568 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * esc); c.height = Math.round(img.height * esc);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.8).split(',')[1];
+  } catch { return url.split(',')[1]; }
 }
 
 // ── FORMATAÇÃO BR ────────────────────────────────────────────────────

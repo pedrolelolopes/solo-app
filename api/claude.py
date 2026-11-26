@@ -10,7 +10,7 @@ MODELOS_PERMITIDOS = frozenset({
 })
 TETO_MAX_TOKENS = 1500
 FERRAMENTAS_PERMITIDAS = frozenset({"web_search_20250305"})
-LIMITE_CORPO_BYTES = 100_000
+LIMITE_CORPO_BYTES = 4_000_000  # Vercel aceita no maximo ~4,5 MB; fotos sao reduzidas no navegador
 
 
 def validar_corpo(corpo):

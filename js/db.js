@@ -1,14 +1,16 @@
 // Acesso ao banco (REST do Supabase) e a /api/claude, sempre com o token do usuario.
-function createDb({ url, anonKey, getToken, fetchFn }) {
+function createDb({ url, anonKey, getToken, fetchFn, onExpirada }) {
+  const expirou = () => { if (onExpirada) onExpirada(); };
   async function cab(extra) {
     const tok = await getToken();
-    if (!tok) return null;
+    if (!tok) { expirou(); return null; }
     return { 'Content-Type': 'application/json', apikey: anonKey, Authorization: `Bearer ${tok}`, ...(extra || {}) };
   }
   async function dbGet(t, qs = '') {
     try {
       const h = await cab(); if (!h) return [];
       const r = await fetchFn(`${url}/rest/v1/${t}?${qs}`, { headers: h });
+      if (r.status === 401) expirou();
       if (!r.ok) { console.error('dbGet error', t, r.status); return []; }
       return await r.json();
     } catch (e) { console.error('dbGet catch', t, e); return []; }
@@ -17,6 +19,7 @@ function createDb({ url, anonKey, getToken, fetchFn }) {
     try {
       const h = await cab({ Prefer: 'return=representation' }); if (!h) return null;
       const r = await fetchFn(`${url}/rest/v1/${caminho}`, { method: metodo, headers: h, body: JSON.stringify(data) });
+      if (r.status === 401) expirou();
       if (!r.ok) return null;
       const d = await r.json(); return Array.isArray(d) ? d[0] : d;
     } catch { return null; }
@@ -31,7 +34,7 @@ function createDb({ url, anonKey, getToken, fetchFn }) {
   }
   async function claudeFetch(body) {
     const tok = await getToken();
-    if (!tok) throw new Error('sessao-expirada');
+    if (!tok) { expirou(); throw new Error('sessao-expirada'); }
     return fetchFn('/api/claude', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },

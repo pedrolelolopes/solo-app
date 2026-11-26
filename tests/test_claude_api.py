@@ -71,3 +71,7 @@ def test_verificar_usuario_token_invalido_devolve_none():
         raise urllib.error.HTTPError("u", 401, "no", {}, io.BytesIO(b""))
 
     assert m.verificar_usuario("tok", "https://x", "anon", abrir) is None
+
+
+def test_limite_do_corpo_aceita_foto_reduzida():
+    assert 1_000_000 <= m.LIMITE_CORPO_BYTES <= 4_500_000

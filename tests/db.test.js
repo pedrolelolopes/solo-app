@@ -47,3 +47,22 @@ test('claudeFetch manda Bearer e corpo JSON para /api/claude', async () => {
 test('claudeFetch sem token lança sessao-expirada', async () => {
   await assert.rejects(mk(async () => R(true, {}), null).claudeFetch({}), /sessao-expirada/);
 });
+
+// --- sessão expirada nas chamadas ao banco (achado da revisão final) ---
+function mkExp(fetchFn, tok, cb) {
+  return createDb({ url: 'https://x.supabase.co', anonKey: 'anon', getToken: async () => tok, fetchFn, onExpirada: cb });
+}
+test('sem token, dbGet avisa onExpirada', async () => {
+  let n = 0; const db = mkExp(async () => R(true, []), null, () => n++);
+  assert.deepStrictEqual(await db.dbGet('t'), []); assert.strictEqual(n, 1);
+});
+test('HTTP 401 do banco avisa onExpirada (dbGet, dbPost, dbPatch)', async () => {
+  let n = 0; const r401 = async () => ({ ok: false, status: 401, json: async () => ({}), text: async () => '' });
+  const db = mkExp(r401, 'tok', () => n++);
+  await db.dbGet('t'); await db.dbPost('t', {}); await db.dbPatch('t', 1, {});
+  assert.strictEqual(n, 3);
+});
+test('resposta ok não chama onExpirada', async () => {
+  let n = 0; const db = mkExp(async () => R(true, [{ id: 1 }]), 'tok', () => n++);
+  await db.dbGet('t'); assert.strictEqual(n, 0);
+});
