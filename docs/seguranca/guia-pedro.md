@@ -30,3 +30,12 @@ Faça isto ANTES do merge.
    - `ALLOWED_ORIGIN` = `https://solo-app-nu.vercel.app`
 3. `ANTHROPIC_API_KEY` já existe: não mexa.
 4. Se pedir, **Redeploy** só depois do merge.
+
+## 4. Ordem de publicação (importa)
+1. SQL `01-colunas.sql` (feito; o app antigo continua funcionando).
+2. Variáveis da Vercel (seção 3).
+3. Enviar a branch `seguranca` (não publica) e testar o login.
+4. Com OK do Pedro: merge no `main` (publica em produção). Testar login e uma ação de IA.
+5. SQL `02-rls.sql` (liga a proteção). Se algo quebrar: `99-rollback.sql`.
+6. Verificar: `python scripts/verificar_anonimo.py`, isolamento entre contas e `/api/claude` sem login (401/403).
+Motivo: se o RLS ligar antes do app novo estar no ar, o app atual para de funcionar.
