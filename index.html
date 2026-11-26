@@ -106,6 +106,7 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 </div>
 
 <div class="app" id="main-app" style="display:none">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;font-size:13px;color:#8e8e93"><span id="user-badge"></span><button onclick="trocarUsuario()" style="background:none;border:1px solid #e5e5ea;border-radius:8px;padding:4px 10px;font-size:13px;color:#1c1c1e;cursor:pointer">Sair</button></div>
 
 <div class="tabs">
   <button class="tab-btn active" onclick="showTab('comprar',this)"><i class="ti ti-shopping-cart"></i>Comprar</button>
@@ -1286,7 +1287,7 @@ async function entrarNoApp(usuario) {
   currentUser = { id: usuario.id, nome: usuario.email, email: usuario.email };
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
-  document.getElementById('user-badge').textContent = '👤 ' + usuario.email;
+  const ub = document.getElementById('user-badge'); if (ub) ub.textContent = '👤 ' + usuario.email;
   await init();
 }
 
