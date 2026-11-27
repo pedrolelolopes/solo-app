@@ -60,3 +60,11 @@ Motivo: se o RLS ligar antes do app novo estar no ar, o app atual para de funcio
 6. Esperado: as duas com `rls_ligado` = true e `politicas` = 1.
 7. Se der erro: cole a mensagem inteira na conversa.
 8. Desfazer: repita os passos 1 a 4 com `supabase/99c-rollback-produtos.sql`.
+
+## Ordem de publicação 2b
+1. A Parte 2a precisa estar no `main` antes. Se ainda não estiver, pare aqui.
+2. Rode `supabase/04-produtos.sql` (passos da seção "Parte 2b — Produtos e lotes"). Esperado: `produtos` e `lotes` com `rls_ligado` true e 1 política.
+3. Diga "ok enviar 2b" na conversa: eu envio só a branch `parte2b` (`git push -u origin parte2b`).
+4. Vercel → projeto → **Deployments** → linha do branch `parte2b` → **Visit**. Teste: nota rápida (texto e voz no iPhone), uma compra com item fora da lista, um item por peso, aba Produtos, **Acabou**, Cupom (cadastrar e conferir).
+5. Só depois do seu "ok, publicar" eu faço o merge no `main` (vai para produção).
+6. Depois eu rodo `python scripts/verificar_anonimo.py` e testo com uma segunda conta; resultados em `docs/seguranca/verificacao-2b.md`.
