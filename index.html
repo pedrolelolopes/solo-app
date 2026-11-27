@@ -1396,7 +1396,9 @@ Responda APENAS com array JSON, sem nenhum texto antes ou depois:
     await mostrarCupom();
   } catch(e) {
     console.error('lerCupom:',e);
-    alert('Erro ao processar. Tente novamente com foto mais clara.');
+    alert('Erro ao processar: '+((e&&e.message)||e)+'
+
+Tente novamente com foto mais clara.');
   }
   btn.disabled=false;btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';input.value='';
 }
