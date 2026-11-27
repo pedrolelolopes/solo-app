@@ -26,7 +26,7 @@ function mk({ prods = [], hoje = [], voz, resposta } = {}) {
   return { t, calls, doc, produtos };
 }
 const linhas = calls => calls.post.filter(c => c[0] === 'lista_hoje').map(c => c[1]);
-const previaTxt = doc => doc.els['nr-revisao'].innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+const previaTxt = doc => doc.els['nr-revisao'].innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').replace(/ ?Adicionar à lista ?$/, '').trim();
 
 function mkFala(opts) {
   let aoFinal;
@@ -168,7 +168,7 @@ test('tocar de novo para a voz', () => {
   const { t, doc } = mk({ voz: { suportado: true, iniciar() {}, parar() { parou++; } } });
   t.alternarVoz(); t.alternarVoz();
   assert.strictEqual(parou, 1);
-  assert.strictEqual(doc.els['nr-voz-btn'].textContent, '🎤 Falar');
+  assert.strictEqual(doc.els['nr-voz-btn'].textContent, '🎤');
 });
 test('sem suporte de voz mostra o aviso e não lança', () => {
   const { t, doc } = mk({ voz: { suportado: false } });
@@ -279,4 +279,62 @@ test('voz: tudo numa frase só ("tomate, aquele tomatinho pequeno, como é que �
   await falar('tomate, aquele tomatinho pequeno, como é que é o nome? tomate cereja');
   await t.adicionar();
   assert.deepStrictEqual(linhas(calls).map(l => l.nome), ['Tomate cereja']);
+});
+
+test('➕ (incluirDigitado) cria a prévia com várias coisas separadas por vírgula e limpa a caixa', async () => {
+  const { t, doc, calls, produtos } = mk(); await produtos.carregar();
+  doc.getElementById('nr-texto').value = 'sabonete, esponja';
+  assert.strictEqual(t.incluirDigitado(), 2);
+  assert.strictEqual(doc.els['nr-texto'].value, '');
+  assert.strictEqual(linhas(calls).length, 0);
+});
+test('o botão "Adicionar à lista" só aparece quando há prévia, dentro dela', async () => {
+  const { t, doc, produtos } = mk(); await produtos.carregar();
+  t.adicionarTexto('sabonete');
+  assert.match(doc.els['nr-revisao'].innerHTML, /Adicionar à lista/);
+  await t.adicionar();
+  assert.ok(!doc.els['nr-revisao'].innerHTML.includes('Adicionar à lista'));
+});
+test('texto digitado: "leite 0" com "Leite sem lactose" cadastrado oferece o nome do cadastro; um toque troca', async () => {
+  const { t, doc, calls, produtos } = mk({ prods: [{ id: 'p1', nome: 'Leite sem lactose', chave: 'leite sem lactose' }] });
+  await produtos.carregar();
+  t.adicionarTexto('leite 0');
+  assert.match(doc.els['nr-revisao'].innerHTML, /Usar “Leite sem lactose”/);
+  await t.usarSugestao(0);
+  await t.adicionar();
+  assert.strictEqual(linhas(calls)[0].produto_id, 'p1');
+  assert.deepStrictEqual(calls.patch.find(c => c[0] === 'produtos')[2], { apelidos: ['leite 0'] });
+});
+test('nome do dicionário não ganha sugestão ("papel manteiga" com "Papel higiênico" cadastrado)', async () => {
+  const { t, doc, produtos } = mk({ prods: [{ id: 'p1', nome: 'Papel higiênico', chave: 'papel higienico' }] });
+  await produtos.carregar();
+  t.adicionarTexto('papel manteiga');
+  assert.ok(!doc.els['nr-revisao'].innerHTML.includes('Usar “'));
+});
+test('tocar em ➕ com o microfone ligado desliga o microfone e aproveita a frase', async () => {
+  let parou = 0;
+  const { t, falar, doc, produtos } = (() => {
+    let aoFinal;
+    const voz = { suportado: true, iniciar: a => { aoFinal = a; }, parar() { parou++; } };
+    const m = mk({ voz }); return { ...m, falar: x => aoFinal(x) };
+  })();
+  await produtos.carregar();
+  t.alternarVoz();
+  await falar('chá de cidreira');
+  doc.getElementById('nr-texto').value = 'sal';
+  t.incluirDigitado();
+  assert.strictEqual(parou, 1);
+  assert.strictEqual(doc.els['nr-voz-btn'].textContent, '🎤');
+  assert.match(previaTxt(doc), /chá de cidreira.*sal/);
+});
+test('tocar em Adicionar à lista com o microfone ligado também desliga o microfone', async () => {
+  let parou = 0;
+  let aoFinal;
+  const voz = { suportado: true, iniciar: a => { aoFinal = a; }, parar() { parou++; } };
+  const { t, calls, produtos } = mk({ voz }); await produtos.carregar();
+  t.alternarVoz();
+  await aoFinal('chá de cidreira');
+  await t.adicionar();
+  assert.strictEqual(parou, 1);
+  assert.deepStrictEqual(linhas(calls).map(l => l.nome), ['Chá de cidreira']);
 });

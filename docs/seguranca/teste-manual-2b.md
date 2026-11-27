@@ -52,3 +52,11 @@ Marque cada item depois de testar. Dados de teste inventados; nada de dados reai
 - [ ] **Comprar:** adicionar um item que não estava na lista (ex.: chocolate) → aparece na hora "Não estava na lista. Essencial / Supérfluo"; ao responder Supérfluo, ganha a etiqueta vermelha **Impulso**; Essencial ganha **Esquecido essencial**; item que veio da lista ganha **Planejado**.
 - [ ] Ao tocar Salvar, o que já foi respondido no carrinho não é perguntado de novo.
 - [ ] **Lista → Hoje:** cada item tem Essencial?/Supérfluo, urgência (Sem pressa / Até uma semana / Até amanhã) e **Acabou** (aparece quando há compra em uso). Mudar ali vale para o produto; a aba Produtos serve só para ver/editar.
+
+## Rodada final (lista com caixa única)
+- [ ] Aba Lista: só uma caixa de texto, com ➕ e 🎤 ao lado. Digitar "leite 0, sabonete" e tocar ➕ → aparece a prévia; "Leite 0" oferece "Usar “Leite sem lactose”" se já existir; **Adicionar à lista** só aparece embaixo da prévia.
+- [ ] Falando: tocar ➕ ou **Adicionar à lista** desliga o microfone sozinho.
+- [ ] Fim da lista tem **Limpar lista**; não existem mais **Recarregar** nem **Limpar comprados** (comprado sai da lista sozinho ao salvar a compra).
+- [ ] Fila "Da lista de hoje": uma seta só, cartão inteiro clicável; ao tocar, o teclado de números já abre no preço (iPhone).
+- [ ] Adicionar item que não estava na lista abre o pop-up Essencial/Supérfluo, **toda vez** (mesmo produto já marcado antes).
+- [ ] Confirmar compra: a caixinha marca e fica marcada ao tocar.

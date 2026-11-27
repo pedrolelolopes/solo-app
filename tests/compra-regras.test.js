@@ -22,9 +22,10 @@ test('item novo supérfluo vira impulso', () => {
   const r = prepararItensCompra([item(1, 'Chiclete')], prods, [], { 1: { essencial: false } });
   assert.strictEqual(r[0].classe, 'impulso');
 });
-test('produto já marcado não precisa de resposta', () => {
-  const r = prepararItensCompra([item(1, 'bala')], prods, [], {});
-  assert.strictEqual(r[0].classe, 'impulso');
+test('produto já marcado como essencial ou supérfluo pergunta de novo a cada compra', () => {
+  assert.strictEqual(prepararItensCompra([item(1, 'bala')], prods, [], {})[0].classe, null);
+  assert.strictEqual(prepararItensCompra([item(1, 'Arroz')], prods, [], {})[0].classe, null);
+  assert.strictEqual(prepararItensCompra([item(1, 'bala')], prods, [], { 1: { essencial: true } })[0].classe, 'esquecido_essencial');
 });
 test('produto sem marca e sem resposta fica com classe null', () => {
   const r = prepararItensCompra([item(1, 'Leite sem lactose')], prods, [], {});

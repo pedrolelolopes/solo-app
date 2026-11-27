@@ -71,8 +71,8 @@ function prepararItensCompra(cart, produtos, hojeList, respostas) {
       const s = _NomesG.sugerirProdutos(c.nome, produtos || [], 1)[0];
       if (s && s.motivo === 'igual') produto = s.produto;
     }
-    const essencial = typeof resp.essencial === 'boolean' ? resp.essencial
-      : (produto && typeof produto.essencial === 'boolean' ? produto.essencial : null);
+    // essencial ou supérfluo é por COMPRA: pergunta sempre (um dia o sorvete é essencial, noutro não)
+    const essencial = typeof resp.essencial === 'boolean' ? resp.essencial : null;
     const chave = produto ? produto.chave : _NomesG.normalizar(c.nome);
     const classe = classificarItem({ produtoId: produto ? produto.id : null, chave, essencial }, planejados);
     return { cartId: c.id, nome: c.nome, produtoNome: produto ? produto.nome : c.nome, produtoId: produto ? produto.id : null, classe, essencial };

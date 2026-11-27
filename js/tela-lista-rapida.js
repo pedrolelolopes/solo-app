@@ -44,19 +44,33 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
     return previa.slice(0, i).find(x => relacionados(x.nome, r.nome) && !negados.has(chavePar(x, r))) || null;
   }
 
+  const dicionario = () => new Set(_Dc.ITENS_COMUNS.map(k => canon(k)));
+  // "leite 0" digitado e "Leite sem lactose" já cadastrado: oferece o nome do cadastro (um toque, sem obrigar).
+  function sugestaoDe(r) {
+    const s = _Nm.sugerirProdutos(r.nome, produtos.lista(), 1)[0];
+    if (!s || s.motivo !== 'parecido') return null;
+    if (dicionario().has(canon(r.nome))) return null; // nome comum do dicionário não precisa de sugestão
+    if (canon(s.produto.nome).split(' ')[0] !== canon(r.nome).split(' ')[0]) return null; // mesma palavra principal
+    return s.produto;
+  }
+
   function desenhar() {
-    el('nr-revisao').innerHTML = previa.map((r, i) => {
+    const itensHtml = previa.map((r, i) => {
       const alvo = perguntaDe(i);
       const q = alvo
         ? `<div class="nr-q"><strong>${esc(r.nome)}</strong> é o mesmo que <strong>${esc(alvo.nome)}</strong>? ` +
           `<button onclick="TelaListaRapida.responder(${i},true)">Sim</button> ` +
           `<button onclick="TelaListaRapida.responder(${i},false)">Não</button></div>`
         : '';
-      return `<div class="nr-item"><span>${esc(r.nome)}</span>${r.detalhe ? ` <small class="nr-det" style="color:#FB5C32">📝 ${esc(r.detalhe)}</small>` : ''} ` +
+      const sug = sugestaoDe(r);
+      const chip = sug ? ` <button class="nr-sug" onclick="TelaListaRapida.usarSugestao(${i})">Usar “${esc(sug.nome)}”</button>` : '';
+      return `<div class="nr-item"><span>${esc(r.nome)}</span>${chip}${r.detalhe ? ` <small class="nr-det" style="color:#FB5C32">📝 ${esc(r.detalhe)}</small>` : ''} ` +
         `<button onclick="TelaListaRapida.editar(${i})" aria-label="Digitar o nome certo">✏️</button> ` +
         `<button onclick="TelaListaRapida.corrigir(${i})" aria-label="Falar o nome certo">🎤</button> ` +
         `<button onclick="TelaListaRapida.remover(${i})" aria-label="Tirar">✕</button>${q}</div>`;
     }).join('');
+    el('nr-revisao').innerHTML = itensHtml + (previa.length
+      ? '<button class="btn btn-p btn-bl" style="margin-top:8px" onclick="TelaListaRapida.adicionar()">Adicionar à lista</button>' : '');
   }
 
   // Põe itens na prévia (sem repetir o que já está lá).
@@ -163,8 +177,35 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
     voz.iniciar(txt => aplicarCorrecao(i, txt), () => {}, { continuo: false, aoErro: aviso });
   }
 
+  // Para o microfone (se estiver ligado) e aproveita a frase que ficou no meio.
+  function pararVoz() {
+    if (!ouvindo) return;
+    if (voz) voz.parar();
+    ouvindo = false; el('nr-voz-btn').textContent = '🎤';
+    if (sobra) { const resto = sobra; sobra = ''; adicionarTexto(resto); }
+  }
+
+  // Botão ➕: o texto digitado (várias coisas com vírgula) vira prévia.
+  function incluirDigitado() {
+    pararVoz();
+    const caixa = el('nr-texto');
+    const txt = caixa.value;
+    if (!txt.trim()) return 0;
+    const n = adicionarTexto(txt);
+    caixa.value = '';
+    aviso(n ? '' : 'Esse(s) item(ns) já estão na prévia ou não entendi. Tente de novo.');
+    return n;
+  }
+
+  function usarSugestao(i) {
+    const r = previa[i]; if (!r) return;
+    const prod = sugestaoDe(r);
+    if (prod) return aplicarCorrecao(i, prod.nome);
+  }
+
   // Botão "Adicionar à lista": o que está na prévia (e no texto digitado) vai para a lista Hoje.
   async function adicionar() {
+    pararVoz(); // tocar em Adicionar também encerra o microfone
     const digitado = el('nr-texto').value;
     if (digitado.trim()) { adicionarTexto(digitado); el('nr-texto').value = ''; }
     if (sobra) { const resto = sobra; sobra = ''; adicionarTexto(resto); }
@@ -193,22 +234,21 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
     const btn = el('nr-voz-btn');
     if (!voz || !voz.suportado) { aviso(SEM_VOZ); return; }
     if (ouvindo) {
-      voz.parar(); ouvindo = false; btn.textContent = '🎤 Falar';
-      if (sobra) { const resto = sobra; sobra = ''; adicionarTexto(resto); } // frase que ficou no meio
+      pararVoz();
       aviso(previa.length ? 'Confira os itens e toque em Adicionar à lista.' : '');
       return;
     }
     ouvindo = true;
-    btn.textContent = '⏹ Parar';
+    btn.textContent = '⏹';
     aviso('Ouvindo... fale os itens. Toque em Parar quando terminar.');
     voz.iniciar(
       txt => adicionarFala(txt),
-      () => { ouvindo = false; btn.textContent = '🎤 Falar'; },
-      { continuo: true, aoParcial: t => { if (t) aviso('Ouvindo: ' + t); }, aoErro: m => { aviso(m); ouvindo = false; btn.textContent = '🎤 Falar'; } },
+      () => { ouvindo = false; btn.textContent = '🎤'; },
+      { continuo: true, aoParcial: t => { if (t) aviso('Ouvindo: ' + t); }, aoErro: m => { aviso(m); ouvindo = false; btn.textContent = '🎤'; } },
     );
   }
 
-  return { adicionar, adicionarTexto, adicionarFala, alternarVoz, corrigir, editar, remover, responder };
+  return { adicionar, adicionarTexto, incluirDigitado, adicionarFala, alternarVoz, corrigir, editar, remover, responder, usarSugestao };
 }
 
 if (typeof module !== 'undefined') module.exports = { createTelaListaRapida };

@@ -363,26 +363,14 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
   <!-- HOJE -->
   <div id="st-hoje">
     <div class="card" style="margin-bottom:10px">
-      <div class="card-title">Nota rápida</div>
-      <textarea id="nr-texto" rows="2" style="width:100%" placeholder="Ex.: papel higiênico, filtro de café e sabonete"></textarea>
-      <div class="btn-row" style="margin-top:8px">
-        <button class="btn btn-s btn-sm" id="nr-voz-btn" style="flex:1" onclick="TelaListaRapida.alternarVoz()">🎤 Falar</button>
-        <button class="btn btn-p btn-sm" id="nr-adicionar-btn" style="flex:1" onclick="TelaListaRapida.adicionar()">Adicionar à lista</button>
-      </div>
-      <div id="nr-aviso" style="font-size:13px;color:#8e8e93;margin-top:6px"></div>
-      <div id="nr-revisao" style="margin-top:6px"></div>
-    </div>
-    <div class="card" style="margin-bottom:10px">
-      <div style="display:flex;gap:8px">
-        <input id="hoje-input" placeholder="O que preciso hoje..." style="flex:1" oninput="updateAC()" onkeydown="if(event.key==='Enter')addHoje()" autocomplete="off">
-        <button class="btn btn-p btn-sm" onclick="addHoje()"><i class="ti ti-plus"></i></button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="nr-texto" placeholder="O que preciso... (separe com vírgula)" style="flex:1" oninput="updateAC()" onkeydown="if(event.key==='Enter')TelaListaRapida.incluirDigitado()" autocomplete="off">
+        <button class="btn btn-p btn-sm" aria-label="Incluir na prévia" onclick="TelaListaRapida.incluirDigitado()"><i class="ti ti-plus"></i></button>
+        <button class="btn btn-s btn-sm" id="nr-voz-btn" aria-label="Falar" onclick="TelaListaRapida.alternarVoz()">🎤</button>
       </div>
       <div id="ac-box" class="ac-box"></div>
-      <div class="btn-row" style="margin-top:10px">
-        <button class="btn btn-s btn-sm" style="flex:1" onclick="loadHoje().then(()=>{renderHoje();renderQueue();})"><i class="ti ti-refresh"></i>Recarregar</button>
-        <button class="btn btn-s btn-sm" style="flex:1" onclick="limparFeitos()"><i class="ti ti-check"></i>Limpar comprados</button>
-        <button class="btn btn-s btn-sm" style="flex:1;color:#ff3b30" onclick="limparTodosHoje()"><i class="ti ti-trash"></i>Limpar tudo</button>
-      </div>
+      <div id="nr-aviso" style="font-size:13px;color:#8e8e93;margin-top:6px"></div>
+      <div id="nr-revisao" style="margin-top:6px"></div>
     </div>
     <div id="hoje-list"></div>
   </div>
@@ -825,8 +813,24 @@ function addItem(pre=null) {
   cart.push({id:++cartCtr,nome,marca,tamanho,unidade,preco,qtd,subtotal,...extra});
   if(!pre){['c-nome','c-marca','c-tamanho'].forEach(id=>document.getElementById(id).value='');clearPrice('c-preco');clearPrice('c-preco-kg');document.getElementById('c-peso').value='';document.getElementById('peso-total').textContent='';document.getElementById('c-qtd').value='1';document.getElementById('c-unidade').value='';}
   document.getElementById('tip-box').style.display='none';
+  const novoId = cartCtr;
   updateTotal();
   trackFrequencia(nome);
+  const pr = prepararCompra().find(x => x.cartId === novoId);
+  if (pr && pr.classe === null) abrirModalEssencial(novoId); // não estava na lista: pergunta já, na hora de adicionar
+}
+
+let meId = null;
+function abrirModalEssencial(id) {
+  const it = cart.find(c => c.id === id); if (!it) return;
+  meId = id;
+  document.getElementById('me-titulo').textContent = it.nome;
+  document.getElementById('modal-essencial').style.display = 'block';
+}
+function responderModalEssencial(v) {
+  if (meId !== null) responderEssencialCarrinho(meId, v);
+  meId = null;
+  document.getElementById('modal-essencial').style.display = 'none';
 }
 
 function addFromQueue(hojeId) {
@@ -842,8 +846,9 @@ function addFromQueue(hojeId) {
   dbPatch('lista_hoje',hojeId,{done:true});
   hojeList=hojeList.filter(i=>i.id!==hojeId);
   renderQueue();
+  // foco já no clique (no iPhone o teclado de números só abre assim): nome já veio, falta o preço
+  document.getElementById('c-preco').focus({preventScroll:true});
   document.getElementById('add-form').scrollIntoView({behavior:'smooth',block:'start'});
-  setTimeout(()=>document.getElementById('c-preco').focus(),300);
 }
 
 async function trackFrequencia(nome) {
@@ -911,6 +916,7 @@ const ETIQ_CLASSE = {
   impulso: '<span class="tag" style="background:#ffe5e5;color:#c0392b">Impulso</span>'
 };
 function responderEssencialCarrinho(id, v) {
+  if (typeof v !== 'boolean') { renderCartItems(); return; } // fechou o pop-up sem escolher: os botões do item continuam lá
   respostasCompra[id] = { ...(respostasCompra[id] || {}), essencial: v };
   renderCartItems();
 }
@@ -938,12 +944,11 @@ function renderQueue() {
   document.getElementById('queue-count').textContent=pend.length+' pendente'+(pend.length!==1?'s':'');
   document.getElementById('queue-items').innerHTML=pend.map(h=>`
     <div class="queue-item" onclick="addFromQueue('${h.id}')">
-      <i class="ti ti-arrow-right" style="color:#FB5C32;flex-shrink:0"></i>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.nome}</div>
-        ${h.detalhe?`<div class="li-sub">${h.detalhe}</div>`:''}
+        <div style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${TextoSeguro.escapar(h.nome)}</div>
+        ${h.detalhe?`<div class="li-sub">${TextoSeguro.escapar(h.detalhe)}</div>`:''}
       </div>
-      <span class="tag tag-o" style="flex-shrink:0">Preencher →</span>
+      <i class="ti ti-chevron-right" style="color:#FB5C32;flex-shrink:0"></i>
     </div>`).join('');
 }
 
@@ -1011,15 +1016,18 @@ function finalizarCompra() {
 function prepararCompra() {
   return Gastos.prepararItensCompra(cart, produtos.lista(), hojeList.concat(listaPlanejada), respostasCompra);
 }
-function marcarNaoComprado(id, on) { if (on) naoCompradosIds.add(id); else naoCompradosIds.delete(id); renderModalCompra(); }
+function marcarNaoComprado(id, on) {
+  if (on) naoCompradosIds.add(id); else naoCompradosIds.delete(id);
+  const ex = document.getElementById('ex-' + id); if (ex) ex.style.display = on ? 'none' : '';
+  atualizarResumoModal(); // só o resumo muda; a caixinha marcada não é redesenhada
+}
 function responderEssencial(id, v) { respostasCompra[id] = { ...(respostasCompra[id] || {}), essencial: v }; renderModalCompra(); }
 function responderMesmoQue(id, produtoId) {
   respostasCompra[id] = { ...(respostasCompra[id] || {}), ...(produtoId ? { mesmoQue: produtoId } : { mesmoQueNao: true }) };
   renderModalCompra();
 }
 
-function renderModalCompra() {
-  const E = TextoSeguro.escapar;
+function atualizarResumoModal() {
   const prep = prepararCompra();
   const comprados = prep.filter(p => !naoCompradosIds.has(p.cartId));
   const sub = id => (cart.find(c => c.id === id) || {}).subtotal || 0;
@@ -1031,11 +1039,17 @@ function renderModalCompra() {
   const btn = document.getElementById('modal-salvar');
   btn.disabled = faltam > 0;
   btn.style.opacity = faltam > 0 ? '.5' : '1';
+}
+
+function renderModalCompra() {
+  const E = TextoSeguro.escapar;
+  const prep = prepararCompra();
+  atualizarResumoModal();
   document.getElementById('modal-itens').innerHTML = prep.map(p => {
     const item = cart.find(c => c.id === p.cartId);
     const resp = respostasCompra[p.cartId] || {};
     let extra = '';
-    if (!naoCompradosIds.has(p.cartId)) {
+    {
       if (!p.produtoId && !resp.mesmoQue && !resp.mesmoQueNao) {
         const s = Nomes.sugerirProdutos(item.nome, produtos.lista(), 1)[0];
         if (s && s.motivo === 'parecido') {
@@ -1055,7 +1069,7 @@ function renderModalCompra() {
         <div style="font-size:14px;font-weight:500">${E(item.nome)}${item.marca ? ' · <span style="font-weight:400;color:#8e8e93">'+E(item.marca)+'</span>' : ''}</div>
         <div style="font-size:12px;color:#8e8e93">${item.precoKg ? fmtN(item.pesoG)+' g × '+fmtBRL(item.precoKg)+'/kg' : fmtBRL(item.preco)+' × '+fmtN(item.qtd)} = ${fmtBRL(item.subtotal)}</div>
       </label>
-      </div>${extra ? '<div style="padding:0 0 8px 32px;border-bottom:1px solid #f2f2f7">'+extra+'</div>' : ''}`;
+      </div>${extra ? '<div id="ex-'+item.id+'" style="padding:0 0 8px 32px;border-bottom:1px solid #f2f2f7;display:'+(naoCompradosIds.has(item.id)?'none':'block')+'">'+extra+'</div>' : ''}`;
   }).join('');
 }
 
@@ -1099,6 +1113,13 @@ async function confirmarCompra() {
       if (prod) paraLotes.push({ produtoId: prod.id, preco: item.subtotal, qtd: item.qtd });
     }
     await TelaProdutos.registrarLotes(paraLotes, dataCompra, local);
+
+    // o que foi comprado sai da lista Hoje sozinho
+    const compradosIds = new Set(paraLotes.map(x => x.produtoId));
+    const compradosNomes = new Set(comprados.map(i => Nomes.canonico(i.nome)));
+    const saem = hojeList.filter(h => !h.done && ((h.produto_id && compradosIds.has(h.produto_id)) || compradosNomes.has(Nomes.canonico(h.nome))));
+    for (const h of saem) { if (!String(h.id).startsWith('tmp-')) await dbDel('lista_hoje', h.id); }
+    hojeList = hojeList.filter(h => !saem.includes(h));
 
     // Itens não comprados voltam para lista de hoje
     for (const item of naoComprados) {
@@ -1236,7 +1257,7 @@ const TelaListaRapida = createTelaListaRapida({
 
 // ── LISTA — HOJE ─────────────────────────────────────────────────────
 function updateAC() {
-  const q=document.getElementById('hoje-input').value.trim();
+  const q=document.getElementById('nr-texto').value.trim();
   const ac=document.getElementById('ac-box');
   if(q.length<2){ac.style.display='none';ac.innerHTML='';return;}
   const m=lista.filter(i=>i.nome.toLowerCase().includes(q.toLowerCase())).slice(0,5);
@@ -1253,26 +1274,11 @@ async function selecionarAC(listaId) {
   const detalhe=[item.marca,(item.tamanho||'')+(item.unidade||''),item.obs].filter(Boolean).join(' · ');
   const tmpId='tmp-'+Date.now();
   hojeList.push({id:tmpId,nome:item.nome,detalhe,lista_permanente:item,done:false});
-  document.getElementById('hoje-input').value='';
+  document.getElementById('nr-texto').value='';
   document.getElementById('ac-box').style.display='none';
   renderHoje(); renderQueue();
   const novo=await dbPost('lista_hoje',{nome:item.nome,detalhe,lista_id:listaId,done:false});
   if(novo){const idx=hojeList.findIndex(i=>i.id===tmpId);if(idx!==-1)hojeList[idx]={...novo,lista_permanente:item};}
-}
-async function addHoje() {
-  const nome=document.getElementById('hoje-input').value.trim(); if(!nome)return;
-  document.getElementById('ac-box').style.display='none';
-  const jf=lista.find(i=>i.nome.toLowerCase()===nome.toLowerCase());
-  if(jf){await selecionarAC(jf.id);return;}
-  // Renderiza imediatamente (otimista)
-  const tmpId='tmp-'+Date.now();
-  hojeList.push({id:tmpId,nome,detalhe:'',done:false});
-  document.getElementById('hoje-input').value='';
-  renderHoje(); renderQueue();
-  // Sincroniza com Supabase em segundo plano
-  const novo=await dbPost('lista_hoje',{nome,detalhe:'',done:false});
-  if(novo){const idx=hojeList.findIndex(i=>i.id===tmpId);if(idx!==-1)hojeList[idx]=novo;}
-  trackFreqHoje(nome);
 }
 async function trackFreqHoje(nome) {
   const k=nome.toLowerCase().trim();
@@ -1311,7 +1317,7 @@ async function limparFeitos() {
   for(const x of feitos)if(!String(x.id).startsWith('tmp-'))await dbDel('lista_hoje',x.id);
 }
 async function limparTodosHoje() {
-  if(!confirm('Limpar toda a lista de hoje?'))return;
+  if(!confirm('Limpar toda a lista?'))return;
   for(const h of hojeList)await dbDel('lista_hoje',h.id);
   hojeList=[];
   renderHoje(); renderQueue();
@@ -1362,7 +1368,7 @@ function renderHoje() {
         ${item.done?'':controlesLinha(item)}
       </div>
       <button class="ico-btn" onclick="rmHoje('${item.id}')"><i class="ti ti-x"></i></button>
-    </div>`).join('')+'</div>';
+    </div>`).join('')+'<button class="btn btn-s btn-sm btn-bl" style="margin-top:10px;color:#ff3b30" onclick="limparTodosHoje()"><i class="ti ti-trash"></i>Limpar lista</button></div>';
 }
 async function confirmarFixo() {
   document.getElementById('lista-notify').style.display='none';
@@ -2310,6 +2316,18 @@ async function excluirReceita(id) {
 
 checkAutoLogin();
 </script>
+<!-- MODAL: ESSENCIAL OU SUPÉRFLUO (ao adicionar item fora da lista) -->
+<div id="modal-essencial" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:210;padding:20px" onclick="if(event.target===this)responderModalEssencial(null)">
+  <div style="background:#fff;border-radius:16px;max-width:360px;margin:22vh auto 0;padding:20px;text-align:center">
+    <div id="me-titulo" style="font-size:18px;font-weight:700"></div>
+    <div style="font-size:14px;color:#8e8e93;margin:8px 0 16px">Esse item não estava na lista. Ele é essencial ou supérfluo?</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="responderModalEssencial(true)" style="flex:1;padding:14px;border:none;border-radius:10px;background:#FB5C32;color:#fff;font-size:15px;font-weight:600">Essencial</button>
+      <button onclick="responderModalEssencial(false)" style="flex:1;padding:14px;border:1px solid #e5e5ea;border-radius:10px;background:#f2f2f7;font-size:15px;font-weight:600">Supérfluo</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CONFIRMAÇÃO DE COMPRA -->
 <div id="modal-confirmacao" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;padding:20px;overflow-y:auto">
   <div style="background:#fff;border-radius:16px;max-width:480px;margin:0 auto;overflow:hidden">
