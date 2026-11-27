@@ -546,6 +546,7 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 <script src="js/db.js"></script>
 <script src="js/texto-seguro.js"></script>
 <script src="js/unidades.js"></script>
+<script src="js/ia.js"></script>
 <script>
 // ── CONFIG / LOGIN / BANCO (módulos em js/) ───────────────────────────
 const auth = SoloAuth.createAuth({
@@ -557,6 +558,7 @@ const { dbGet, dbPost, dbPatch, dbDel, claudeFetch } = SoloDb.createDb({
   getToken: () => auth.getAccessToken(), fetchFn: (...a) => fetch(...a),
   onExpirada: () => mostrarLogin('Sua sessão expirou. Entre de novo (seu carrinho continua aberto).')
 });
+const ia = SoloIa.createIa({ claudeFetch });
 
 // ── CLAUDE ───────────────────────────────────────────────────────────
 function extractJSON(text) {
@@ -577,27 +579,16 @@ function extractJSON(text) {
   return null;
 }
 
-async function claudeImg(prompt, b64, mime, model='claude-sonnet-4-6') {
+async function claudeImg(prompt, b64, mime, model=SoloIa.MODELO_BARATO) {
   try {
-    const r = await claudeFetch({
-        model, // sonnet para cupom (complexo), haiku para etiqueta (simples)
-        max_tokens:1500,
-        messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
-          {type:'text',text:prompt}
-        ]}]
-    });
-    if (!r.ok) { const e=await r.json(); throw new Error(e.error?.message||'Erro HTTP '+r.status); }
-    const d = await r.json();
-    if (d.error) throw new Error(d.error.message);
-    return d.content?.map(b=>b.text||'').join('')||'';
+    return (await ia.claudeArquivo({prompt, b64, mime, model, maxTokens:1500})).texto;
   } catch(e) { console.error('claudeImg erro:',e); if (e.message==='sessao-expirada') mostrarLogin('Sua sessão expirou. Entre de novo.'); throw e; }
 }
 
-async function claudeText(prompt, maxTk=400) {
+async function claudeText(prompt, maxTk=400, model='claude-sonnet-4-6') {
   try {
     const r = await claudeFetch({
-        model:'claude-sonnet-4-6',
+        model,
         max_tokens:maxTk,
         messages:[{role:'user',content:prompt}]
     });
@@ -609,6 +600,10 @@ async function claudeText(prompt, maxTk=400) {
 }
 
 async function toB64(file) {
+  if (file.type==='application/pdf') {
+    const u = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    return u.split(',')[1];
+  }
   // reduz a foto (lado maior 1568 px, JPEG) para caber no limite do servidor (~4 MB)
   const url = await new Promise((res,rej)=>{
     const r = new FileReader();
@@ -835,7 +830,7 @@ Responda APENAS com JSON válido, sem texto extra:
   "unidade": "unidade de venda: g, kg, ml, L, un, pç, cx, pct ou null",
   "preco": 0.00
 }`;
-    const resp=await ai(prompt, b64, file.type, 'claude-haiku-4-5-20251001', 300);
+    const resp=(await ia.claudeArquivo({prompt, b64, mime:file.type, model:SoloIa.MODELO_BARATO, maxTokens:300})).texto;
     const p=extractJSON(resp);
     if(p && p.nome) {
       document.getElementById('c-nome').value = p.nome;
@@ -867,7 +862,7 @@ async function getDica() {
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>';
   const t=cart.reduce((s,i)=>s+i.subtotal,0);
   const resumo=cart.map(i=>`${i.nome}: ${fmtBRL(i.subtotal)}`).join(', ');
-  const resp=await claudeText(`Estou no supermercado. Itens: ${resumo}. Total: ${fmtBRL(t)}. UMA dica prática para economizar. Máximo 2 frases em português. Responda em texto simples, sem markdown.`,150);
+  const resp=await claudeText(`Estou no supermercado. Itens: ${resumo}. Total: ${fmtBRL(t)}. UMA dica prática para economizar. Máximo 2 frases em português. Responda em texto simples, sem markdown.`,150,SoloIa.MODELO_BARATO);
   const tb=document.getElementById('tip-box');
   tb.innerHTML='💡 '+(resp?TextoSeguro.mdSimples(resp):'Dica indisponível no momento.');
   tb.style.display='block';
@@ -974,7 +969,7 @@ async function comparar() {
     </div>`;
   document.getElementById('comp-boxes').innerHTML=mkBox(an,ppuA,ba.base,winner==='A')+mkBox(bn,ppuB,bb.base,winner==='B');
   document.getElementById('comp-pct').innerHTML=`diferença de <strong style="color:#2ea86b">${pct}%</strong> por ${ba.base}`;
-  const resp=await claudeText(`Produto A: ${an} ${fmtBRL(pa)}/${fmtN(qa)}${aun}. Produto B: ${bn} ${fmtBRL(pb)}/${fmtN(qb)}${bun}. ${winner==='A'?an:bn} é ${pct}% mais barato por ${ba.base}. Recomende em 2 frases em português. Responda em texto simples, sem markdown.`,150);
+  const resp=await claudeText(`Produto A: ${an} ${fmtBRL(pa)}/${fmtN(qa)}${aun}. Produto B: ${bn} ${fmtBRL(pb)}/${fmtN(qb)}${bun}. ${winner==='A'?an:bn} é ${pct}% mais barato por ${ba.base}. Recomende em 2 frases em português. Responda em texto simples, sem markdown.`,150,SoloIa.MODELO_BARATO);
   if(resp){ct.innerHTML='💡 '+TextoSeguro.mdSimples(resp);ct.style.display='block';}
 }
 
@@ -998,7 +993,7 @@ async function lerFolheto(input) {
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>Lendo...';
   try {
     const b64=await toB64(file);
-    const resp=await claudeImg('Folheto promocional. Extraia produtos e preços. SOMENTE JSON válido: {"itens":[{"nome":"...","preco":0.00}]}',b64,file.type,'claude-sonnet-4-6');
+    const resp=await claudeImg('Folheto promocional. Extraia produtos e preços. SOMENTE JSON válido: {"itens":[{"nome":"...","preco":0.00}]}',b64,file.type,SoloIa.MODELO_BARATO);
     const p=extractJSON(resp);
     if(p&&p.itens&&p.itens.length){folhetos.push({id:Date.now().toString(),mercado,itens:p.itens});document.getElementById('fol-mercado').value='';renderFolhetos();}
     else{alert('Não consegui ler o folheto. Tente foto mais clara.');}
@@ -1197,7 +1192,7 @@ async function lerCupom(input) {
     const prompt=`Analise este cupom fiscal de supermercado brasileiro e liste TODOS os produtos.
 Responda APENAS com array JSON, sem nenhum texto antes ou depois:
 [{"nome":"Nome do produto","preco":0.00,"qtd":1}]`;
-    const resp=await ai(prompt,b64,file.type,'claude-sonnet-4-6',1500);
+    const resp=(await ia.claudeArquivo({prompt, b64, mime:file.type, model:SoloIa.MODELO_BARATO, maxTokens:1500})).texto;
     let itens=null;
     const parsed=extractJSON(resp);
     if(parsed){
@@ -1369,7 +1364,7 @@ async function buscarOpiniao(){
   document.getElementById('opiniao-box').style.display='none';
   try{
     const r=await claudeFetch({
-      model:'claude-sonnet-4-6',max_tokens:600,
+      model:SoloIa.MODELO_BARATO,max_tokens:600,
       tools:[{type:'web_search_20250305',name:'web_search'}],
       messages:[{role:'user',content:'Pesquise opiniões sobre o produto "'+nome+'". Responda em português com: qualidade geral (nota /10), principais prós, principais contras, e conclusão se vale comprar. Seja objetivo e direto, máximo 8 linhas. Responda em texto simples, sem markdown.'}]
     });

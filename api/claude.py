@@ -10,12 +10,16 @@ MODELOS_PERMITIDOS = frozenset({
 })
 TETO_MAX_TOKENS = 1500
 FERRAMENTAS_PERMITIDAS = frozenset({"web_search_20250305"})
+CAMPOS_PERMITIDOS = frozenset({"model", "max_tokens", "messages", "tools", "system", "temperature"})
+TIPOS_CONTEUDO = frozenset({"text", "image", "document"})
 LIMITE_CORPO_BYTES = 4_000_000  # Vercel aceita no maximo ~4,5 MB; fotos sao reduzidas no navegador
 
 
 def validar_corpo(corpo):
     if not isinstance(corpo, dict):
         return "Corpo inválido."
+    if any(k not in CAMPOS_PERMITIDOS for k in corpo):
+        return "Campo não permitido."
     if corpo.get("model") not in MODELOS_PERMITIDOS:
         return "Modelo não permitido."
     mt = corpo.get("max_tokens")
@@ -24,6 +28,12 @@ def validar_corpo(corpo):
     msgs = corpo.get("messages")
     if not isinstance(msgs, list) or not msgs:
         return "messages vazio."
+    for msg in msgs:
+        conteudo = msg.get("content") if isinstance(msg, dict) else None
+        if isinstance(conteudo, list):
+            for bloco in conteudo:
+                if not isinstance(bloco, dict) or bloco.get("type") not in TIPOS_CONTEUDO:
+                    return "Conteúdo não permitido."
     tools = corpo.get("tools")
     if tools is not None:
         if not isinstance(tools, list):
@@ -32,6 +42,11 @@ def validar_corpo(corpo):
             if not isinstance(t, dict) or t.get("type") not in FERRAMENTAS_PERMITIDAS:
                 return "Ferramenta não permitida."
     return None
+
+
+def mapear_status(status):
+    """Chave errada na Anthropic (401/403) vira 502, para o app nao confundir com sessao expirada."""
+    return 502 if status in (401, 403) else status
 
 
 def extrair_token(cabecalhos):
@@ -130,4 +145,7 @@ class handler(BaseHTTPRequestHandler):
                 status, dados = e.code, {"error": {"message": "Erro do serviço de IA."}}
         except Exception:
             status, dados = 502, {"error": {"message": "Não foi possível falar com o serviço de IA."}}
+        novo = mapear_status(status)
+        if novo != status:
+            status, dados = novo, {"error": {"message": "Serviço de IA indisponível."}}
         self._enviar(status, dados, permitida)
