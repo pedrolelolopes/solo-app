@@ -88,3 +88,21 @@ test('temAberto diz se há compra em uso', async () => {
   assert.strictEqual(t.temAberto('p1'), true);
   assert.strictEqual(t.temAberto('outro'), false);
 });
+
+test('ajustarLote acha o lote da compra editada e troca data, preço e quantidade', async () => {
+  const { t, calls, produtos } = mk({ prods: [P()], lotes: [L({ comprado_em: '2026-01-01', preco_total: 140.2 })] }); await produtos.carregar(); await t.carregar();
+  assert.strictEqual(await t.ajustarLote('p1', '2026-01-01', 140.2, { data: '2026-01-03', preco: 117.77, qtd: 1 }), true);
+  assert.deepStrictEqual(calls.patch[0], ['lotes', 'a', { comprado_em: '2026-01-03', inicio: '2026-01-03', preco_total: 117.77, qtd: 1 }]);
+});
+test('ajustarLote e removerLote não mexem em lote de outra compra', async () => {
+  const { t, calls, produtos } = mk({ prods: [P()], lotes: [L({ comprado_em: '2026-01-01', preco_total: 140.2 })] }); await produtos.carregar(); await t.carregar();
+  assert.strictEqual(await t.ajustarLote('p1', '2026-01-02', 140.2, { data: '2026-01-03', preco: 1, qtd: 1 }), false);
+  assert.strictEqual(await t.removerLote('p1', '2026-01-01', 99), false);
+  assert.strictEqual(calls.patch.length, 0);
+});
+test('removerLote apaga o lote da compra apagada', async () => {
+  const dels = [];
+  const { t, produtos } = mk({ prods: [P()], lotes: [L({ comprado_em: '2026-01-01', preco_total: 140.2 })] }); await produtos.carregar(); await t.carregar();
+  assert.strictEqual(await t.removerLote('p1', '2026-01-01', 140.2), true);
+  assert.strictEqual(t.temAberto('p1'), false);
+});

@@ -157,5 +157,26 @@ function aplicarDescontos(itens, descontoGeral) {
   });
 }
 
-const _gastosApi = { numeroCupom, normalizarCupom, aplicarDescontos, valorPorPeso, lerPesoG, classificarItem, resumoCompra, gastosPorProduto, prepararItensCompra, compararCupom };
+// Edição de uma compra salva: o que mudou entre os itens originais e os editados (id null = item novo).
+function diffItens(originais, editados) {
+  const sub = i => r2Gastos((Number(i.preco) || 0) * (Number(i.qtd) || 1));
+  const ids = new Set((editados || []).filter(i => i.id).map(i => String(i.id)));
+  const remover = (originais || []).filter(o => !ids.has(String(o.id))).map(o => o.id);
+  const alterar = [];
+  for (const e of editados || []) {
+    if (!e.id) continue;
+    const o = (originais || []).find(x => String(x.id) === String(e.id));
+    if (!o) continue;
+    const novo = { nome: String(e.nome).trim() || o.nome, preco: Number(e.preco) || 0, qtd: Number(e.qtd) || 1 };
+    novo.subtotal = sub(novo);
+    const mudou = novo.nome !== o.nome || novo.preco !== Number(o.preco) || novo.qtd !== Number(o.qtd) || novo.subtotal !== Number(o.subtotal);
+    if (mudou) alterar.push({ id: e.id, antes: { nome: o.nome, subtotal: Number(o.subtotal), produto_id: o.produto_id || null }, campos: novo });
+  }
+  const adicionar = (editados || []).filter(i => !i.id && String(i.nome || '').trim() && Number(i.preco) > 0)
+    .map(i => { const n = { nome: String(i.nome).trim(), preco: Number(i.preco), qtd: Number(i.qtd) || 1 }; n.subtotal = sub(n); return n; });
+  const total = r2Gastos([...(editados || []).filter(i => i.id), ...adicionar].reduce((t, i) => t + sub(i), 0));
+  return { alterar, remover, adicionar, total };
+}
+
+const _gastosApi = { diffItens, numeroCupom, normalizarCupom, aplicarDescontos, valorPorPeso, lerPesoG, classificarItem, resumoCompra, gastosPorProduto, prepararItensCompra, compararCupom };
 if (typeof module !== 'undefined') module.exports = _gastosApi; else window.Gastos = _gastosApi;

@@ -83,3 +83,24 @@ test('desconto maior que o item não deixa preço negativo', () => {
   const r = aplicarDescontos([{ nome: 'A', preco: 5, qtd: 1, desconto: 9 }], 0);
   assert.strictEqual(r[0].preco, 0);
 });
+
+const { diffItens } = require('../js/gastos.js');
+const orig = [
+  { id: 'a', nome: 'Remédio', preco: 140.2, qtd: 1, subtotal: 140.2, produto_id: 'p1' },
+  { id: 'b', nome: 'Sal', preco: 3, qtd: 2, subtotal: 6, produto_id: null },
+];
+test('diffItens: sem mudança não altera nada', () => {
+  const r = diffItens(orig, orig.map(o => ({ ...o })));
+  assert.deepStrictEqual([r.alterar.length, r.remover.length, r.adicionar.length, r.total], [0, 0, 0, 146.2]);
+});
+test('diffItens: preço corrigido muda subtotal e guarda o antes', () => {
+  const r = diffItens(orig, [{ ...orig[0], preco: 117.77 }, orig[1]]);
+  assert.strictEqual(r.alterar.length, 1);
+  assert.deepStrictEqual([r.alterar[0].campos.subtotal, r.alterar[0].antes.subtotal, r.alterar[0].antes.produto_id, r.total], [117.77, 140.2, 'p1', 123.77]);
+});
+test('diffItens: item tirado vai para remover e item novo para adicionar', () => {
+  const r = diffItens(orig, [orig[0], { id: null, nome: 'Água', preco: '2.5', qtd: 2 }, { id: null, nome: '', preco: 5 }]);
+  assert.deepStrictEqual(r.remover, ['b']);
+  assert.deepStrictEqual(r.adicionar, [{ nome: 'Água', preco: 2.5, qtd: 2, subtotal: 5 }]);
+  assert.strictEqual(r.total, 145.2);
+});

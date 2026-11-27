@@ -66,3 +66,9 @@ Marque cada item depois de testar. Dados de teste inventados; nada de dados reai
 - [ ] Nome da farmácia/mercado, tipo (Farmácia, Mercado…) e data vêm preenchidos pelo cupom.
 - [ ] Botão **Salvar compra** sempre ligado; ao tocar, pergunta Essencial/Supérfluo de cada item que não estava na lista (pop-up, um por vez). Depois aparece "Compra salva no Histórico" e a compra está lá, com o local.
 - [ ] Desconto geral (sem item dono): repartido pelos itens; a soma bate com o total do cupom. Se não bater, aparece aviso vermelho.
+
+## Histórico editável
+- [ ] Histórico → abrir uma compra → **Editar**: mudar nome do lugar, data, local; corrigir nome, preço e quantidade de um item; ✕ tira item; **Adicionar item**; o total muda na hora.
+- [ ] **Salvar alterações** → a compra aparece corrigida e o total da lista do Histórico também.
+- [ ] Aba Produtos: o lote daquele produto acompanhou o novo preço/data.
+- [ ] **Apagar compra** pede confirmação, some do Histórico e o lote dela some da aba Produtos.
