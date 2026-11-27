@@ -82,3 +82,9 @@ test('nome de produto com HTML sai escapado', async () => {
   t.render();
   assert.ok(!els['produtos-lista'].innerHTML.includes('<img'));
 });
+
+test('temAberto diz se há compra em uso', async () => {
+  const { t, produtos } = mk({ prods: [P()], lotes: [L()] }); await produtos.carregar(); await t.carregar();
+  assert.strictEqual(t.temAberto('p1'), true);
+  assert.strictEqual(t.temAberto('outro'), false);
+});

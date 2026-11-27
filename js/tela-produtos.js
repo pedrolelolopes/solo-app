@@ -75,6 +75,8 @@ function createTelaProdutos({ db, produtos, doc, hoje, avisar, storage }) {
     storage.setItem(CHAVE_DISPENSADOS, JSON.stringify([...d]));
   }
 
+  const temAberto = produtoId => !!_Lt.abertoDe(lotes, produtoId);
+
   function verCompras(id) { if (abertos.has(id)) abertos.delete(id); else abertos.add(id); render(); }
 
   function cartao(p) {
@@ -126,7 +128,7 @@ function createTelaProdutos({ db, produtos, doc, hoje, avisar, storage }) {
       : '<div class="empty"><i class="ti ti-box"></i><p>Nenhum produto ainda. Eles aparecem quando você anota ou compra.</p></div>';
   }
 
-  return { carregar, render, registrarLotes, acabou, marcar, estimativa, sugeridos, dispensarSugerido, verCompras };
+  return { carregar, render, registrarLotes, acabou, marcar, estimativa, sugeridos, dispensarSugerido, verCompras, temAberto };
 }
 
 if (typeof module !== 'undefined') module.exports = { createTelaProdutos };

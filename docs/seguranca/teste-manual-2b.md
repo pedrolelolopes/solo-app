@@ -47,3 +47,8 @@ Marque cada item depois de testar. Dados de teste inventados; nada de dados reai
 - [ ] "Leite sem" (pausa) "quero dizer leite integral" → só "Leite integral".
 - [ ] "Tomate" (pausa) "aquele tomate pequenininho" (pausa) "tomate cereja" → só "Tomate cereja".
 - [ ] "Leite de magnésio", depois "leite" (pausa) "sem lactose" → não pergunta nada sobre magnésio; responder Não numa pergunta não repete.
+
+## Final da 2b — tudo no mesmo lugar
+- [ ] **Comprar:** adicionar um item que não estava na lista (ex.: chocolate) → aparece na hora "Não estava na lista. Essencial / Supérfluo"; ao responder Supérfluo, ganha a etiqueta vermelha **Impulso**; Essencial ganha **Esquecido essencial**; item que veio da lista ganha **Planejado**.
+- [ ] Ao tocar Salvar, o que já foi respondido no carrinho não é perguntado de novo.
+- [ ] **Lista → Hoje:** cada item tem Essencial?/Supérfluo, urgência (Sem pressa / Até uma semana / Até amanhã) e **Acabou** (aparece quando há compra em uso). Mudar ali vale para o produto; a aba Produtos serve só para ver/editar.

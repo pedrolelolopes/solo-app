@@ -903,14 +903,26 @@ function salvarEdit() {
   cancelEdit(); updateTotal();
 }
 function cancelEdit(){editCartId=null;document.getElementById('edit-form').style.display='none';}
-function removeCartItem(id){cart=cart.filter(i=>i.id!==id);updateTotal();}
+function removeCartItem(id){cart=cart.filter(i=>i.id!==id);delete respostasCompra[id];updateTotal();}
 
+const ETIQ_CLASSE = {
+  planejado: '<span class="tag">Planejado</span>',
+  esquecido_essencial: '<span class="tag tag-o">Esquecido essencial</span>',
+  impulso: '<span class="tag" style="background:#ffe5e5;color:#c0392b">Impulso</span>'
+};
+function responderEssencialCarrinho(id, v) {
+  respostasCompra[id] = { ...(respostasCompra[id] || {}), essencial: v };
+  renderCartItems();
+}
 function renderCartItems() {
+  const prep = cart.length ? prepararCompra() : [];
+  const classeDe = id => (prep.find(x => x.cartId === id) || {}).classe;
   document.getElementById('cart-items').innerHTML=cart.map(item=>`
     <div class="li">
       <div class="li-info">
-        <div class="li-name">${TextoSeguro.escapar(item.nome)}${item.marca?' <span class="tag">'+TextoSeguro.escapar(item.marca)+'</span>':''}</div>
+        <div class="li-name">${TextoSeguro.escapar(item.nome)}${item.marca?' <span class="tag">'+TextoSeguro.escapar(item.marca)+'</span>':''} ${ETIQ_CLASSE[classeDe(item.id)]||''}</div>
         <div class="li-sub">${item.precoKg?fmtN(item.pesoG)+' g × '+fmtBRL(item.precoKg)+'/kg':[item.tamanho+(item.unidade||''),fmtBRL(item.preco)+' × '+fmtN(item.qtd)].filter(Boolean).join(' · ')}</div>
+        ${classeDe(item.id)===null?`<div style="margin-top:4px;font-size:12px">Não estava na lista. <button onclick="responderEssencialCarrinho(${item.id},true)">Essencial</button> <button onclick="responderEssencialCarrinho(${item.id},false)">Supérfluo</button></div>`:''}
       </div>
       <div class="li-price">${fmtBRL(item.subtotal)}</div>
       <button class="ico-btn" onclick="editCartItem(${item.id})"><i class="ti ti-pencil"></i></button>
@@ -991,7 +1003,7 @@ async function getDica() {
 
 function finalizarCompra() {
   if (!cart.length) return;
-  respostasCompra = {}; naoCompradosIds = new Set();
+  naoCompradosIds = new Set();
   renderModalCompra();
   document.getElementById('modal-confirmacao').style.display = 'block';
 }
@@ -1117,7 +1129,7 @@ async function confirmarCompra() {
 
 function limparCart(){
   if(!cart.length)return;
-  if(confirm('Limpar todo o carrinho?')){cart=[];listaPlanejada=[];document.getElementById('tip-box').style.display='none';updateTotal();}
+  if(confirm('Limpar todo o carrinho?')){cart=[];listaPlanejada=[];respostasCompra={};document.getElementById('tip-box').style.display='none';updateTotal();}
 }
 
 // ── COMPARAR ─────────────────────────────────────────────────────────
@@ -1304,6 +1316,39 @@ async function limparTodosHoje() {
   hojeList=[];
   renderHoje(); renderQueue();
 }
+async function produtoDaLinha(itemId) {
+  const it = hojeList.find(i => String(i.id) === String(itemId)); if (!it) return null;
+  let p = it.produto_id ? produtos.lista().find(x => x.id === it.produto_id) : produtos.achar(it.nome);
+  if (!p) p = await produtos.garantir(it.nome);
+  if (p && it.produto_id !== p.id) {
+    it.produto_id = p.id;
+    if (!String(it.id).startsWith('tmp-')) dbPatch('lista_hoje', it.id, { produto_id: p.id });
+  }
+  return p;
+}
+async function marcarLinha(itemId, campo, v) {
+  const p = await produtoDaLinha(itemId); if (!p) return;
+  await TelaProdutos.marcar(p.id, campo === 'essencial' ? { essencial: v === '' ? null : v === 'true' } : { urgencia: v });
+  atualizarDatalist(); renderHoje();
+}
+async function acabouLinha(itemId) {
+  const p = await produtoDaLinha(itemId);
+  if (p) await TelaProdutos.acabou(p.id);
+  renderHoje();
+}
+function controlesLinha(item) {
+  const p = item.produto_id ? produtos.lista().find(x => x.id === item.produto_id) : produtos.achar(item.nome);
+  const ess = p ? (p.essencial === true ? 'true' : p.essencial === false ? 'false' : '') : '';
+  const urg = p ? p.urgencia : 'sem_pressa';
+  const op = (v, t, a) => `<option value="${v}"${a === v ? ' selected' : ''}>${t}</option>`;
+  const id = TextoSeguro.escapar(String(item.id));
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+    <select onchange="marcarLinha('${id}','essencial',this.value)">${op('', 'Essencial?', ess)}${op('true', 'Essencial', ess)}${op('false', 'Supérfluo', ess)}</select>
+    <select onchange="marcarLinha('${id}','urgencia',this.value)">${op('sem_pressa', 'Sem pressa', urg)}${op('semana', 'Até uma semana', urg)}${op('amanha', 'Até amanhã', urg)}</select>
+    ${p && TelaProdutos.temAberto(p.id) ? `<button onclick="acabouLinha('${id}')">Acabou</button>` : ''}
+  </div>`;
+}
+
 function renderHoje() {
   const cont=document.getElementById('hoje-list'); if(!cont)return;
   if(!hojeList.length){cont.innerHTML='<div class="empty"><i class="ti ti-checklist"></i><p>Lista de hoje vazia</p></div>';return;}
@@ -1314,6 +1359,7 @@ function renderHoje() {
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:500;text-decoration:${item.done?'line-through':'none'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${TextoSeguro.escapar(item.nome)}${item.origem==='sugerida'?' <span class="tag tag-o">Sugerido</span>':''}</div>
         ${item.detalhe?`<div class="li-sub">${TextoSeguro.escapar(item.detalhe)}</div>`:''}
+        ${item.done?'':controlesLinha(item)}
       </div>
       <button class="ico-btn" onclick="rmHoje('${item.id}')"><i class="ti ti-x"></i></button>
     </div>`).join('')+'</div>';
