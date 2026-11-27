@@ -63,7 +63,7 @@ function sugeridosParaLista(hoje, produtos, lotes, pendentesProdutoIds, dispensa
   });
 }
 
-function comparar(produtoLotes, hoje) {
+function compararLotes(produtoLotes, hoje) {
   return (produtoLotes || []).slice()
     .sort((a, b) => (a.inicio < b.inicio ? 1 : a.inicio > b.inicio ? -1 : 0))
     .map(l => ({
@@ -72,5 +72,5 @@ function comparar(produtoLotes, hoje) {
     }));
 }
 
-const _lotesApi = { diasEntre, custoPorDia, duracaoPorUnidade, duracaoMedia, fimPrevisto, diasParaAcabar, dataDeEntrada, abertoDe, sugeridosParaLista, comparar };
+const _lotesApi = { diasEntre, custoPorDia, duracaoPorUnidade, duracaoMedia, fimPrevisto, diasParaAcabar, dataDeEntrada, abertoDe, sugeridosParaLista, comparar: compararLotes };
 if (typeof module !== 'undefined') module.exports = _lotesApi; else window.Lotes = _lotesApi;
