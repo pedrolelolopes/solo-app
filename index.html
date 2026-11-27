@@ -211,6 +211,10 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
         <i class="ti ti-plus"></i>Adicionar
       </button>
     </div>
+    <button class="btn btn-s btn-bl" style="margin-top:8px" onclick="buscarOpiniao()" id="opiniao-btn">
+      <i class="ti ti-world-search"></i>Buscar opiniões na web
+    </button>
+    <div id="opiniao-box" class="tip-box" style="display:none"></div>
     <!-- Botão de voz -->
     <button id="voz-btn" onclick="toggleVoz()" style="width:100%;margin-top:8px;padding:14px;border:none;border-radius:12px;background:#1c1c1e;color:#fff;font-size:15px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
       <i class="ti ti-microphone" id="voz-icon"></i>
@@ -540,6 +544,8 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/db.js"></script>
+<script src="js/texto-seguro.js"></script>
+<script src="js/unidades.js"></script>
 <script>
 // ── CONFIG / LOGIN / BANCO (módulos em js/) ───────────────────────────
 const auth = SoloAuth.createAuth({
@@ -861,9 +867,9 @@ async function getDica() {
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>';
   const t=cart.reduce((s,i)=>s+i.subtotal,0);
   const resumo=cart.map(i=>`${i.nome}: ${fmtBRL(i.subtotal)}`).join(', ');
-  const resp=await claudeText(`Estou no supermercado. Itens: ${resumo}. Total: ${fmtBRL(t)}. UMA dica prática para economizar. Máximo 2 frases em português.`,150);
+  const resp=await claudeText(`Estou no supermercado. Itens: ${resumo}. Total: ${fmtBRL(t)}. UMA dica prática para economizar. Máximo 2 frases em português. Responda em texto simples, sem markdown.`,150);
   const tb=document.getElementById('tip-box');
-  tb.innerHTML='💡 '+(resp||'Dica indisponível no momento.');
+  tb.innerHTML='💡 '+(resp?TextoSeguro.mdSimples(resp):'Dica indisponível no momento.');
   tb.style.display='block';
   btn.disabled=false; btn.innerHTML='<i class="ti ti-bulb"></i>Dica';
 }
@@ -949,21 +955,27 @@ async function comparar() {
   const aun=document.getElementById('a-un').value,bun=document.getElementById('b-un').value;
   const an=document.getElementById('a-nome').value||'Produto A',bn=document.getElementById('b-nome').value||'Produto B';
   if(!pa||!qa||!pb||!qb){alert('Preencha preço e quantidade dos dois produtos.');return;}
-  const ppuA=pa/qa,ppuB=pb/qb,winner=ppuA<=ppuB?'A':'B';
-  const pct=(Math.abs(ppuA-ppuB)/Math.max(ppuA,ppuB)*100).toFixed(1);
+  const ba=Unidades.precoPorBase(pa,qa,aun),bb=Unidades.precoPorBase(pb,qb,bun);
+  const ct=document.getElementById('comp-tip'); ct.style.display='none';
   document.getElementById('comp-result').style.display='block';
+  if(!ba||!bb||ba.base!==bb.base){
+    document.getElementById('comp-boxes').innerHTML='';
+    document.getElementById('comp-pct').textContent=`Unidades diferentes (${ba?ba.base:aun} x ${bb?bb.base:bun}): não dá para comparar.`;
+    return;
+  }
+  const ppuA=ba.valor,ppuB=bb.valor,winner=ppuA<=ppuB?'A':'B';
+  const pct=(Math.abs(ppuA-ppuB)/Math.max(ppuA,ppuB)*100).toFixed(1);
   const mkBox=(nome,ppu,un,win)=>`
     <div class="win-box" style="background:${win?'#fff7f5':'#f2f2f7'};border:${win?'2px solid #FB5C32':'1px solid #e5e5ea'}">
       ${win?'<div style="font-size:10px;color:#FB5C32;font-weight:600;margin-bottom:4px">✓ MELHOR PREÇO</div>':''}
-      <div style="font-size:12px;color:#8e8e93;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nome}</div>
+      <div style="font-size:12px;color:#8e8e93;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${TextoSeguro.escapar(nome)}</div>
       <div style="font-size:20px;font-weight:600;color:${win?'#FB5C32':'#1c1c1e'}">${fmtBRL(ppu)}</div>
       <div style="font-size:11px;color:#8e8e93">por ${un}</div>
     </div>`;
-  document.getElementById('comp-boxes').innerHTML=mkBox(an,ppuA,aun,winner==='A')+mkBox(bn,ppuB,bun,winner==='B');
-  document.getElementById('comp-pct').innerHTML=`diferença de <strong style="color:#2ea86b">${pct}%</strong> por unidade`;
-  const ct=document.getElementById('comp-tip'); ct.style.display='none';
-  const resp=await claudeText(`Produto A: ${an} ${fmtBRL(pa)}/${fmtN(qa)}${aun}. Produto B: ${bn} ${fmtBRL(pb)}/${fmtN(qb)}${bun}. ${winner==='A'?an:bn} é ${pct}% mais barato/unidade. Recomende em 2 frases em português.`,150);
-  if(resp){ct.innerHTML='💡 '+resp;ct.style.display='block';}
+  document.getElementById('comp-boxes').innerHTML=mkBox(an,ppuA,ba.base,winner==='A')+mkBox(bn,ppuB,bb.base,winner==='B');
+  document.getElementById('comp-pct').innerHTML=`diferença de <strong style="color:#2ea86b">${pct}%</strong> por ${ba.base}`;
+  const resp=await claudeText(`Produto A: ${an} ${fmtBRL(pa)}/${fmtN(qa)}${aun}. Produto B: ${bn} ${fmtBRL(pb)}/${fmtN(qb)}${bun}. ${winner==='A'?an:bn} é ${pct}% mais barato por ${ba.base}. Recomende em 2 frases em português. Responda em texto simples, sem markdown.`,150);
+  if(resp){ct.innerHTML='💡 '+TextoSeguro.mdSimples(resp);ct.style.display='block';}
 }
 
 // ── FOLHETOS ─────────────────────────────────────────────────────────
@@ -972,7 +984,7 @@ function renderFolhetos() {
   el.innerHTML=folhetos.length?folhetos.map(f=>`
     <div class="card" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><div style="font-weight:500">${f.mercado}</div><div class="li-sub">${f.itens.length} itens no folheto</div></div>
+        <div><div style="font-weight:500">${TextoSeguro.escapar(f.mercado)}</div><div class="li-sub">${f.itens.length} itens no folheto</div></div>
         <button class="ico-btn" onclick="rmFolheto('${f.id}')"><i class="ti ti-x"></i></button>
       </div>
     </div>`).join(''):'<div class="empty"><i class="ti ti-file-x"></i><p>Nenhum folheto adicionado</p></div>';
@@ -1001,7 +1013,7 @@ async function compararFolhetos() {
   const lt=lista.map(i=>[i.nome,i.marca,(i.tamanho||'')+(i.unidade||'')].filter(Boolean).join(' ')).join('\n');
   const ft=folhetos.map(f=>`=== ${f.mercado} ===\n${f.itens.map(i=>`${i.nome}: ${fmtBRL(i.preco)}`).join('\n')}`).join('\n\n');
   const resp=await claudeText(`Minha lista:\n${lt}\n\n${ft}\n\nPara cada item da lista mostre o preço em cada mercado. Calcule total por mercado. Indique qual mercado ir e quanto economizaria. Use formato claro em português.`,600);
-  document.getElementById('fol-result').innerHTML=`<div class="card" style="font-size:13px;line-height:1.7;white-space:pre-wrap">${resp||'Sem resultado.'}</div>`;
+  document.getElementById('fol-result').innerHTML=`<div class="card" style="font-size:13px;line-height:1.7">${resp?TextoSeguro.mdSimples(resp):'Sem resultado.'}</div>`;
   btn.disabled=false; btn.innerHTML='<i class="ti ti-chart-bar"></i>Comparar com minha lista';
 }
 
@@ -1359,13 +1371,13 @@ async function buscarOpiniao(){
     const r=await claudeFetch({
       model:'claude-sonnet-4-6',max_tokens:600,
       tools:[{type:'web_search_20250305',name:'web_search'}],
-      messages:[{role:'user',content:'Pesquise opiniões sobre o produto "'+nome+'". Responda em português com: qualidade geral (nota /10), principais prós, principais contras, e conclusão se vale comprar. Seja objetivo e direto, máximo 8 linhas.'}]
+      messages:[{role:'user',content:'Pesquise opiniões sobre o produto "'+nome+'". Responda em português com: qualidade geral (nota /10), principais prós, principais contras, e conclusão se vale comprar. Seja objetivo e direto, máximo 8 linhas. Responda em texto simples, sem markdown.'}]
     });
     if(!r.ok){const e=await r.json();throw new Error(e.error?.message||'Erro '+r.status);}
     const d=await r.json();
     if(d.error)throw new Error(d.error.message);
     const text=d.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'Sem resultado.';
-    document.getElementById('opiniao-box').innerHTML='🔍 '+text;
+    document.getElementById('opiniao-box').innerHTML='🔍 '+TextoSeguro.mdSimples(text);
     document.getElementById('opiniao-box').style.display='block';
   }catch(e){alert('Erro ao buscar opiniões: '+e.message);}
   btn.disabled=false;btn.innerHTML='<i class="ti ti-world-search"></i>Buscar opiniões na web';
