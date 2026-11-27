@@ -1163,38 +1163,50 @@ const produtos = SoloProdutos.createProdutos({ db: { dbGet, dbPost, dbPatch, dbD
 const vozNota = (() => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const LIMITE_MS = 5 * 60 * 1000; // ouve até 5 minutos seguidos
-  let rec = null, querOuvir = false;
+  let rec = null, querOuvir = false, sessao = 0;
+  const soltar = r => { if (!r) return; r.onresult = null; r.onend = null; r.onerror = null; try { r.abort(); } catch (err) {} };
   return {
     suportado: !!SR,
     // continua ouvindo (reabre sozinho quando o navegador corta por silêncio) até parar() ou o limite
     iniciar(aoFinal, aoFim, op = {}) {
       const continuo = op.continuo !== false;
+      const minha = ++sessao;           // eventos de sessões antigas não mexem nesta
+      soltar(rec); rec = null;
       const inicio = Date.now();
+      let rapidos = 0;
       querOuvir = true;
+      const desistir = msg => { querOuvir = false; if (op.aoErro) op.aoErro(msg); aoFim(); };
       const abrir = () => {
-        rec = new SR(); rec.lang = 'pt-BR'; rec.continuous = continuo; rec.interimResults = !!op.aoParcial;
-        rec.onresult = e => {
+        const t0 = Date.now();
+        const r = new SR(); rec = r;
+        r.lang = 'pt-BR'; r.continuous = continuo; r.interimResults = !!op.aoParcial;
+        r.onresult = e => {
           let parcial = '';
           for (let i = e.resultIndex; i < e.results.length; i++) {
-            const r = e.results[i];
-            if (r.isFinal) aoFinal(r[0].transcript); else parcial += r[0].transcript;
+            const x = e.results[i];
+            if (x.isFinal) aoFinal(x[0].transcript); else parcial += x[0].transcript;
           }
           if (op.aoParcial) op.aoParcial(parcial);
         };
-        rec.onerror = e => {
-          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-            querOuvir = false;
-            if (op.aoErro) op.aoErro('Permita o microfone para este site (Ajustes do Safari) e tente de novo.');
-          }
+        r.onerror = e => {
+          if (minha !== sessao) return;
+          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') desistir('Permita o microfone para este site (Ajustes do Safari) e tente de novo.');
+          else if (e.error && e.error !== 'no-speech' && e.error !== 'aborted' && op.aoErro) op.aoErro('Microfone: ' + e.error);
         };
-        rec.onend = () => {
+        r.onend = () => {
+          if (minha !== sessao) return;
           if (querOuvir && continuo && Date.now() - inicio < LIMITE_MS) {
-            setTimeout(() => { if (querOuvir) { try { abrir(); } catch (err) { querOuvir = false; aoFim(); } } }, 250);
+            rapidos = (Date.now() - t0 < 1500) ? rapidos + 1 : 0;
+            if (rapidos >= 4) { desistir('O microfone parou de abrir. Toque em Falar de novo.'); return; }
+            setTimeout(() => {
+              if (!querOuvir || minha !== sessao) return;
+              try { abrir(); } catch (err) { desistir('O microfone parou. Toque em Falar de novo.'); }
+            }, 300);
           } else { querOuvir = false; aoFim(); }
         };
-        rec.start();
+        r.start();
       };
-      abrir();
+      setTimeout(() => { if (minha !== sessao) return; try { abrir(); } catch (err) { desistir('Não consegui abrir o microfone. Toque em Falar de novo.'); } }, 200);
     },
     parar() { querOuvir = false; if (rec) { try { rec.stop(); } catch (err) {} } }
   };
