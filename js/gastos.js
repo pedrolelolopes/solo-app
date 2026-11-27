@@ -183,8 +183,14 @@ function interpretarEtiqueta(p) {
   const o = p || {};
   const limpo = v => (v === null || v === undefined || String(v).trim().toLowerCase() === 'null' ? '' : String(v).trim());
   const unidade = limpo(o.unidade);
-  const porKg = o.preco_por_kg === true || String(o.preco_por_kg).toLowerCase() === 'true' || /^kg$/i.test(limpo(o.unidade_preco));
-  return { nome: limpo(o.nome), marca: limpo(o.marca), tamanho: limpo(o.tamanho), unidade, preco: numeroCupom(o.preco), porKg };
+  let preco = numeroCupom(o.preco);
+  const precoTotal = numeroCupom(o.preco_total);
+  const pesoKg = numeroCupom(o.peso_kg !== undefined ? o.peso_kg : o.peso);
+  const pesoG = pesoKg > 0 ? Math.round(pesoKg * 1000 * 1000) / 1000 : 0; // etiqueta de balança: peso já pesado
+  let porKg = o.preco_por_kg === true || String(o.preco_por_kg).toLowerCase() === 'true' || /^kg$/i.test(limpo(o.unidade_preco));
+  if (pesoG > 0 && (preco > 0 || precoTotal > 0)) porKg = true; // etiqueta com peso pesado só pode ser a peso
+  if (porKg && !(preco > 0) && precoTotal > 0 && pesoG > 0) preco = Math.round(precoTotal / (pesoG / 1000) * 100) / 100; // só tem total e peso
+  return { nome: limpo(o.nome), marca: limpo(o.marca), tamanho: limpo(o.tamanho), unidade, preco, porKg, pesoG, precoTotal };
 }
 
 const _gastosApi = { interpretarEtiqueta, diffItens, numeroCupom, normalizarCupom, aplicarDescontos, valorPorPeso, lerPesoG, classificarItem, resumoCompra, gastosPorProduto, prepararItensCompra, compararCupom };

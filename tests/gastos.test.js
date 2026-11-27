@@ -54,10 +54,23 @@ test('gastosPorProduto agrupa nomes diferentes do mesmo produto_id e ordena por 
 const { interpretarEtiqueta } = require('../js/gastos.js');
 test('interpretarEtiqueta: produto de prateleira', () => {
   const r = interpretarEtiqueta({ nome: 'Leite Integral', marca: 'Italac', tamanho: '1', unidade: 'L', preco: '5,99', preco_por_kg: false });
-  assert.deepStrictEqual(r, { nome: 'Leite Integral', marca: 'Italac', tamanho: '1', unidade: 'L', preco: 5.99, porKg: false });
+  assert.deepStrictEqual(r, { nome: 'Leite Integral', marca: 'Italac', tamanho: '1', unidade: 'L', preco: 5.99, porKg: false, pesoG: 0, precoTotal: 0 });
 });
 test('interpretarEtiqueta: tomate a R$ 18/kg vira porKg e "null" vira vazio', () => {
   const r = interpretarEtiqueta({ nome: 'Tomate', marca: 'null', tamanho: null, unidade: 'kg', preco: 18, preco_por_kg: true });
   assert.deepStrictEqual([r.nome, r.marca, r.tamanho, r.preco, r.porKg], ['Tomate', '', '', 18, true]);
 });
 test('interpretarEtiqueta: resposta vazia não lança', () => assert.strictEqual(interpretarEtiqueta(null).nome, ''));
+
+test('interpretarEtiqueta: etiqueta de balança (peso já pesado) preenche o peso em gramas', () => {
+  const r = interpretarEtiqueta({ nome: 'Tomate', preco: '18,00', preco_por_kg: true, peso_kg: '0,634', preco_total: '11,41' });
+  assert.deepStrictEqual([r.porKg, r.pesoG, r.preco, r.precoTotal], [true, 634, 18, 11.41]);
+});
+test('interpretarEtiqueta: só peso e total (sem preço por kg) calcula o preço por kg', () => {
+  const r = interpretarEtiqueta({ nome: 'Queijo', preco_por_kg: false, peso: 0.25, preco_total: 15 });
+  assert.deepStrictEqual([r.porKg, r.pesoG, r.preco], [true, 250, 60]);
+});
+test('interpretarEtiqueta: peso da embalagem sem balança não é peso pesado', () => {
+  const r = interpretarEtiqueta({ nome: 'Arroz', tamanho: '5', unidade: 'kg', preco: 22.9, preco_por_kg: false });
+  assert.deepStrictEqual([r.porKg, r.pesoG], [false, 0]);
+});

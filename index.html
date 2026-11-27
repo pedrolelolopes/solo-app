@@ -975,7 +975,9 @@ Responda APENAS com JSON válido, sem texto extra:
   "tamanho": "número da quantidade da embalagem (ex: 1, 500, 200) ou null",
   "unidade": "unidade da embalagem: g, kg, ml, L, un, pç, cx, pct ou null",
   "preco": 0.00,
-  "preco_por_kg": true se o preço da etiqueta é POR QUILO (produto vendido a peso: frutas, verduras, carnes, frios, padaria), senão false
+  "preco_por_kg": true se o preço da etiqueta é POR QUILO (produto vendido a peso: frutas, verduras, carnes, frios, padaria), senão false,
+  "peso_kg": peso JÁ PESADO impresso na etiqueta da balança, em quilos (ex: 0.634), ou null se a etiqueta não tem peso pesado,
+  "preco_total": valor total a pagar impresso na etiqueta da balança, ou null
 }`;
     const resp=(await ia.claudeArquivo({prompt, b64, mime:file.type, model:SoloIa.MODELO_BARATO, maxTokens:300})).texto;
     const e=Gastos.interpretarEtiqueta(extractJSON(resp));
@@ -986,7 +988,8 @@ Responda APENAS com JSON válido, sem texto extra:
         // vendido a peso: já muda para "Por peso" com o preço por kg; falta só o peso
         setModoPeso(true);
         if(e.preco) setPriceVal('c-preco-kg', e.preco);
-        document.getElementById('c-peso').focus();
+        if(e.pesoG) document.getElementById('c-peso').value = String(e.pesoG).replace('.',',') + ' g'; // etiqueta de balança: peso já veio
+        else document.getElementById('c-peso').focus();
         pesoAoVivo();
       } else {
         setModoPeso(false);
