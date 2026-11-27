@@ -43,3 +43,43 @@ test('ids do app voltam em preço diferente e só no app', () => {
   assert.strictEqual(r.precoDiferente[0].precoCupom, 6);
   assert.strictEqual(r.soNoApp[0].id, 8);
 });
+
+const { normalizarCupom, aplicarDescontos, numeroCupom } = require('../js/gastos.js');
+
+test('numeroCupom entende ponto, vírgula e milhar', () => {
+  assert.strictEqual(numeroCupom('117,77'), 117.77);
+  assert.strictEqual(numeroCupom('R$ 1.117,77'), 1117.77);
+  assert.strictEqual(numeroCupom(5.5), 5.5);
+  assert.strictEqual(numeroCupom('abc'), 0);
+});
+test('normalizarCupom aceita lista antiga e objeto novo com local, tipo, data e descontos', () => {
+  assert.strictEqual(normalizarCupom([{ nome: 'A', preco: 2, qtd: 1 }]).itens.length, 1);
+  const c = normalizarCupom({ local: ' Drogaria X ', tipo: 'Farmácia', data: '2026-11-20', itens: [{ nome: 'Remédio', preco: '140,20', qtd: 1, desconto: '22,43' }], desconto_geral: 0, total: '117,77' });
+  assert.deepStrictEqual([c.local, c.tipo, c.data, c.itens[0].preco, c.itens[0].desconto, c.total], ['Drogaria X', 'farmacia', '2026-11-20', 140.2, 22.43, 117.77]);
+});
+test('normalizarCupom: tipo ou data inválidos viram vazio e item sem preço sai', () => {
+  const c = normalizarCupom({ tipo: 'padaria', data: '20/11', itens: [{ nome: 'x', preco: 0 }, { nome: 'y', preco: 1 }] });
+  assert.deepStrictEqual([c.tipo, c.data, c.itens.length], ['', '', 1]);
+});
+test('desconto no item: remédio de 140,20 com desconto de 22,43 custou 117,77', () => {
+  const r = aplicarDescontos([{ nome: 'Remédio', preco: 140.2, qtd: 1, desconto: 22.43 }], 0);
+  assert.strictEqual(Math.round(r[0].preco * r[0].qtd * 100) / 100, 117.77);
+  assert.deepStrictEqual([r[0].precoOriginal, r[0].desconto], [140.2, 22.43]);
+});
+test('desconto no item com quantidade 2 vale para a linha toda', () => {
+  const r = aplicarDescontos([{ nome: 'A', preco: 10, qtd: 2, desconto: 4 }], 0);
+  assert.strictEqual(r[0].preco, 8);
+});
+test('desconto geral sem dono é repartido pelos itens e a soma bate', () => {
+  const r = aplicarDescontos([{ nome: 'A', preco: 10, qtd: 1 }, { nome: 'B', preco: 30, qtd: 1 }], 4);
+  assert.deepStrictEqual(r.map(x => Math.round(x.preco * x.qtd * 100) / 100), [9, 27]);
+});
+test('desconto geral com divisão quebrada não perde nem cria centavo', () => {
+  const r = aplicarDescontos([{ nome: 'A', preco: 10, qtd: 1 }, { nome: 'B', preco: 10, qtd: 1 }, { nome: 'C', preco: 10, qtd: 1 }], 1);
+  const soma = r.reduce((s, x) => s + x.preco * x.qtd, 0);
+  assert.strictEqual(Math.round(soma * 100) / 100, 29);
+});
+test('desconto maior que o item não deixa preço negativo', () => {
+  const r = aplicarDescontos([{ nome: 'A', preco: 5, qtd: 1, desconto: 9 }], 0);
+  assert.strictEqual(r[0].preco, 0);
+});
