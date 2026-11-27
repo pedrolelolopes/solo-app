@@ -12,6 +12,11 @@ function canonicoNome(texto) {
   return normalizarNome(texto).split(' ').filter(w => w && !CONECTORES_CANON.has(w)).join(' ');
 }
 
+// Chave para achar repetidos: como o canônico, mas "leites" = "leite".
+function chaveBaseNome(texto) {
+  return canonicoNome(texto).split(' ').map(w => (w.length > 3 ? w.replace(/s$/, '') : w)).join(' ');
+}
+
 function palavrasNome(texto) {
   return new Set(normalizarNome(texto).split(' ').filter(w => w.length >= 3 && !LIGACAO_NOME.has(w)));
 }
@@ -38,5 +43,5 @@ function sugerirProdutos(texto, produtos, max = 3) {
     .map(({ produto, motivo }) => ({ produto, motivo }));
 }
 
-if (typeof module !== 'undefined') module.exports = { normalizar: normalizarNome, canonico: canonicoNome, palavras: palavrasNome, sugerirProdutos };
-else window.Nomes = { normalizar: normalizarNome, canonico: canonicoNome, palavras: palavrasNome, sugerirProdutos };
+if (typeof module !== 'undefined') module.exports = { normalizar: normalizarNome, canonico: canonicoNome, chaveBase: chaveBaseNome, palavras: palavrasNome, sugerirProdutos };
+else window.Nomes = { normalizar: normalizarNome, canonico: canonicoNome, chaveBase: chaveBaseNome, palavras: palavrasNome, sugerirProdutos };

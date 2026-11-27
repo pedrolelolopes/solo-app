@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { separarItens } = require('../js/voz-lista.js');
+const { separarItens, separarItensComDetalhe } = require('../js/voz-lista.js');
 
 test('separa por vírgula e "e"', () => assert.deepStrictEqual(
   separarItens('papel higiênico, filtro de café e sabonete'), ['papel higiênico', 'filtro de café', 'sabonete']));
@@ -37,3 +37,22 @@ test('só ligação entre conhecidos mantém um item ("café com leite")', () =>
   assert.deepStrictEqual(separarItens('café com leite', [...CONHECIDOS, 'leite']), ['café com leite']));
 test('vírgula continua separando mesmo com nomes conhecidos', () =>
   assert.deepStrictEqual(separarItens('papel, manteiga', CONHECIDOS), ['papel', 'manteiga']));
+
+test('tira "né" e enchimento no fim', () => {
+  assert.deepStrictEqual(separarItens('chá de cidreira, né'), ['chá de cidreira']);
+  assert.deepStrictEqual(separarItens('então café tá'), ['café']);
+});
+test('palavra repetida em seguida vira uma ("leite leites sem lactose")', () =>
+  assert.deepStrictEqual(separarItens('leite leites sem lactose'), ['leite sem lactose']));
+test('"chá pro Manuel" guarda o nome como detalhe', () =>
+  assert.deepStrictEqual(separarItensComDetalhe('chá pro Manuel'), [{ nome: 'chá', detalhe: 'pro Manuel' }]));
+test('"para a Maria" e "para o João" também', () => {
+  assert.deepStrictEqual(separarItensComDetalhe('bolo para a Maria'), [{ nome: 'bolo', detalhe: 'para a Maria' }]);
+  assert.deepStrictEqual(separarItensComDetalhe('presente para o João Pedro'), [{ nome: 'presente', detalhe: 'para o João Pedro' }]);
+});
+test('"para café" (minúscula) e nomes conhecidos não viram detalhe', () => {
+  assert.deepStrictEqual(separarItensComDetalhe('filtro de papel para café', CONHECIDOS.concat('filtro de papel para café')), [{ nome: 'filtro de papel para café', detalhe: '' }]);
+  assert.deepStrictEqual(separarItensComDetalhe('filtro para café'), [{ nome: 'filtro para café', detalhe: '' }]);
+});
+test('mesmo conhecido com maiúscula do reconhecedor não vira detalhe ("Filtro de papel para Café")', () =>
+  assert.deepStrictEqual(separarItensComDetalhe('Filtro de papel para Café', CONHECIDOS.concat('filtro de papel para café')), [{ nome: 'Filtro de papel para Café', detalhe: '' }]));

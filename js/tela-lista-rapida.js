@@ -1,7 +1,7 @@
-// Caixa "Nota rápida" da aba Lista: fala (microfone sempre ligado até parar) ou texto vira itens na lista Hoje.
-// Os itens entram sozinhos, sem perguntas; ✕ remove, ✏️ digita o nome certo e 🎤 fala o nome certo.
-// Quando o Pedro corrige, o que foi ouvido vira apelido do produto certo ("deixa" -> "Dexa"): aprende sem IA.
-// No navegador: window.TelaListaRapida = createTelaListaRapida({...}) (criado no index.html).
+// Caixa "Nota rápida" da aba Lista. Fala (microfone ligado até parar) ou texto vira uma PRÉVIA (rascunho);
+// ✏️ digita o nome certo, 🎤 fala o nome certo, ✕ tira. Ao tocar "Adicionar à lista" os itens vão para a lista Hoje
+// e a prévia some. Quando o Pedro corrige, o que foi ouvido vira apelido do produto certo ("deixa" -> "Dexa").
+// Tudo por regras locais, sem IA. No navegador: window.TelaListaRapida = createTelaListaRapida({...}) (index.html).
 const _Nm = typeof require !== 'undefined' ? require('./nomes.js') : window.Nomes;
 const _Vz = typeof require !== 'undefined' ? require('./voz-lista.js') : window.VozLista;
 const _Ts = typeof require !== 'undefined' ? require('./texto-seguro.js') : window.TextoSeguro;
@@ -10,124 +10,122 @@ const _Dc = typeof require !== 'undefined' ? require('./dicionario.js') : window
 const SEM_VOZ = 'Seu navegador não tem voz. Use o microfone do teclado do iPhone.';
 // frase que termina assim ainda está incompleta: espera o resto ("filtro de papel para" ... "café")
 const FIM_INCOMPLETO = new Set(['para', 'pra', 'de', 'da', 'do', 'das', 'dos', 'com', 'sem', 'e', 'em', 'no', 'na']);
+// frase que começa assim continua o item anterior ("leite" ... "sem lactose")
+const INICIO_CONTINUA = new Set(['sem', 'com', 'de', 'da', 'do', 'das', 'dos', 'para', 'pra', 'em']);
 
 // getHoje(): linhas atuais da lista Hoje. voz: {suportado, iniciar(aoFinal, aoFim, {continuo, aoParcial, aoErro}), parar()}.
-// perguntar(msg, valorInicial): texto digitado (window.prompt). aoAdicionar/aoRemover/aoAtualizar mantêm a lista na tela.
-function createTelaListaRapida({ db, produtos, doc, aoAdicionar, aoRemover, aoAtualizar, voz, getHoje, perguntar }) {
+// perguntar(msg, valorInicial): texto digitado (window.prompt). aoAdicionar(linhas): a tela atualiza a lista Hoje.
+function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, perguntar }) {
   const esc = _Ts.escapar;
   const el = id => doc.getElementById(id);
-  let recentes = []; // {id, nome, original}
+  let previa = []; // {uid, nome, original, detalhe, pergunta: uid|null}
+  let seq = 0;
   let ouvindo = false;
   let sobra = ''; // começo de frase esperando o resto
   const aviso = t => { el('nr-aviso').textContent = t; };
-  const maiuscula = s => s.charAt(0).toUpperCase() + s.slice(1);
   const canon = _Nm.canonico;
+  const base = _Nm.chaveBase;
 
   const conhecidos = () => [..._Dc.ITENS_COMUNS, ...produtos.lista().flatMap(p => [p.nome, ...(p.apelidos || [])])];
+  const palavrasDe = nome => new Set(canon(nome).split(' ').filter(Boolean));
+  // "chá" está dentro de "chá de cidreira": podem ser o mesmo produto
+  function relacionados(a, b) {
+    const A = palavrasDe(a), B = palavrasDe(b);
+    const [menor, maior] = A.size <= B.size ? [A, B] : [B, A];
+    return menor.size >= 1 && menor.size < maior.size && [...menor].every(w => maior.has(w));
+  }
 
   function desenhar() {
-    el('nr-revisao').innerHTML = recentes.map((r, i) =>
-      `<div class="nr-item"><span>${esc(r.nome)}</span> ` +
-      `<button onclick="TelaListaRapida.editar(${i})" aria-label="Digitar o nome certo">✏️</button> ` +
-      `<button onclick="TelaListaRapida.corrigir(${i})" aria-label="Falar o nome certo">🎤</button> ` +
-      `<button onclick="TelaListaRapida.remover(${i})" aria-label="Remover">✕</button></div>`).join('');
+    el('nr-revisao').innerHTML = previa.map((r, i) => {
+      const alvo = r.pergunta ? previa.find(x => x.uid === r.pergunta) : null;
+      const q = alvo
+        ? `<div class="nr-q"><strong>${esc(r.nome)}</strong> é o mesmo que <strong>${esc(alvo.nome)}</strong>? ` +
+          `<button onclick="TelaListaRapida.responder(${i},true)">Sim</button> ` +
+          `<button onclick="TelaListaRapida.responder(${i},false)">Não</button></div>`
+        : '';
+      return `<div class="nr-item"><span>${esc(r.nome)}</span>${r.detalhe ? ` <small>(${esc(r.detalhe)})</small>` : ''} ` +
+        `<button onclick="TelaListaRapida.editar(${i})" aria-label="Digitar o nome certo">✏️</button> ` +
+        `<button onclick="TelaListaRapida.corrigir(${i})" aria-label="Falar o nome certo">🎤</button> ` +
+        `<button onclick="TelaListaRapida.remover(${i})" aria-label="Tirar">✕</button>${q}</div>`;
+    }).join('');
   }
 
-  // Cria as linhas na lista Hoje a partir do texto (falado ou digitado). Devolve quantas entraram.
-  async function adicionarTextoAgora(texto) {
-    const nomes = _Vz.separarItens(texto, conhecidos());
-    const pend = (getHoje ? getHoje() : []).filter(h => !h.done).slice();
-    const criados = [];
-    for (const nome of nomes) {
-      const prod = await produtos.garantir(nome);
-      if (!prod) continue;
-      if (pend.some(h => h.produto_id === prod.id || canon(h.nome) === canon(prod.nome))) continue;
-      const linha = await db.dbPost('lista_hoje', { nome: prod.nome, detalhe: '', done: false, produto_id: prod.id, origem: 'anotada' });
-      if (!linha) continue;
-      criados.push(linha); pend.push(linha);
-      recentes.push({ id: linha.id, nome: prod.nome, original: nome });
+  // Põe itens na prévia (sem repetir o que já está lá).
+  function incluir(itens) {
+    let n = 0;
+    for (const it of itens) {
+      if (previa.some(p => base(p.nome) === base(it.nome))) continue;
+      const rel = previa.find(p => relacionados(p.nome, it.nome));
+      previa.push({ uid: ++seq, nome: it.nome, original: it.nome, detalhe: it.detalhe || '', pergunta: rel ? rel.uid : null });
+      n++;
     }
-    if (criados.length && aoAdicionar) aoAdicionar(criados);
-    recentes = recentes.slice(-20);
     desenhar();
-    return criados.length;
-  }
-
-  // Uma frase por vez (a fala pode mandar várias seguidas): evita criar o mesmo item duas vezes.
-  let fila = Promise.resolve();
-  function adicionarTexto(texto) {
-    fila = fila.then(() => adicionarTextoAgora(texto), () => adicionarTextoAgora(texto));
-    return fila;
-  }
-
-  // Fala: junta pedaços ("filtro de papel para" + "café") antes de criar os itens.
-  async function adicionarFalaAgora(txt) {
-    let t = (sobra + ' ' + String(txt || '')).trim();
-    sobra = '';
-    if (!t) return 0;
-    const ultima = _Nm.normalizar(t).split(' ').pop();
-    if (FIM_INCOMPLETO.has(ultima)) { sobra = t; return 0; }
-    const itens = _Vz.separarItens(t, conhecidos());
-    // "filtro de papel" + pausa + "café": se juntos formam um nome conhecido, é um item só
-    const ult = recentes[recentes.length - 1];
-    if (ult && itens.length) {
-      const junto = ult.nome + ' ' + itens[0];
-      const cj = canon(junto);
-      if (conhecidos().some(k => canon(k) === cj)) {
-        const prod = await produtos.garantir(junto);
-        if (prod) {
-          const linha = await db.dbPatch('lista_hoje', ult.id, { nome: prod.nome, produto_id: prod.id });
-          ult.nome = prod.nome;
-          if (linha && aoAtualizar) aoAtualizar(linha);
-          itens.shift();
-          desenhar();
-        }
-      }
-    }
-    if (!itens.length) return 0;
-    return adicionarTextoAgora(itens.join(', '));
-  }
-  function adicionarFala(txt) {
-    fila = fila.then(() => adicionarFalaAgora(txt), () => adicionarFalaAgora(txt));
-    return fila;
-  }
-
-  // Botão "Adicionar à lista" (texto digitado).
-  async function adicionar() {
-    const txt = el('nr-texto').value;
-    const n = await adicionarTexto(txt);
-    el('nr-texto').value = '';
-    if (n) aviso(`${n} item(ns) na lista.`);
-    else aviso(_Vz.separarItens(txt).length ? 'Nada novo: esses itens já estão na lista.' : 'Não achei itens. Escreva ou fale de novo.');
     return n;
   }
 
-  async function remover(i) {
-    const r = recentes[i]; if (!r) return;
-    await db.dbDel('lista_hoje', r.id);
-    if (aoRemover) aoRemover(r.id);
-    recentes.splice(i, 1);
+  // Texto digitado ou frase falada já completa.
+  function adicionarTexto(texto) {
+    return incluir(_Vz.separarItensComDetalhe(texto, conhecidos()));
+  }
+
+  // Fala: junta pedaços ("filtro de papel para" + "café", "leite" + "sem lactose") antes de pôr na prévia.
+  function adicionarFala(txt) {
+    let t = (sobra + ' ' + String(txt || '')).trim();
+    sobra = '';
+    if (!t) return 0;
+    const palavras = _Nm.normalizar(t).split(' ');
+    if (FIM_INCOMPLETO.has(palavras[palavras.length - 1])) { sobra = t; return 0; }
+    const ult = previa[previa.length - 1];
+    if (ult && INICIO_CONTINUA.has(palavras[0])) { // continua o item anterior
+      ult.nome = (ult.nome + ' ' + t).replace(/\s+/g, ' ').trim();
+      desenhar();
+      return 0;
+    }
+    const itens = _Vz.separarItensComDetalhe(t, conhecidos());
+    if (ult && itens.length) {
+      if (base(ult.nome) === base(itens[0].nome)) itens.shift(); // eco ("leite", "leites")
+      else {
+        const junto = ult.nome + ' ' + itens[0].nome;
+        if (conhecidos().some(k => canon(k) === canon(junto))) { // "filtro de papel" + "café"
+          ult.nome = junto; if (itens[0].detalhe) ult.detalhe = itens[0].detalhe;
+          itens.shift();
+        }
+      }
+    }
+    return incluir(itens);
+  }
+
+  function responder(i, sim) {
+    const r = previa[i]; if (!r) return;
+    const alvo = previa.find(x => x.uid === r.pergunta);
+    if (sim && alvo) {
+      const maior = palavrasDe(r.nome).size >= palavrasDe(alvo.nome).size ? r : alvo;
+      const outro = maior === r ? alvo : r;
+      maior.detalhe = maior.detalhe || outro.detalhe;
+      maior.pergunta = null;
+      previa = previa.filter(x => x !== outro);
+    } else r.pergunta = null;
     desenhar();
   }
 
+  function remover(i) { previa.splice(i, 1); desenhar(); }
+
   async function aplicarCorrecao(i, texto) {
-    const r = recentes[i]; if (!r) return;
+    const r = previa[i]; if (!r) return;
     const nome = _Vz.separarItens(texto, conhecidos())[0] || String(texto || '').trim();
     if (!nome) return;
     const prod = await produtos.garantir(nome);
     if (!prod) { aviso('Não consegui corrigir. Tente de novo.'); return; }
-    const linha = await db.dbPatch('lista_hoje', r.id, { nome: prod.nome, produto_id: prod.id });
     // aprende: o que foi ouvido/escrito errado passa a valer como esse produto
     if (r.original && canon(r.original) !== canon(prod.nome)) await produtos.adicionarApelido(prod.id, r.original);
-    r.nome = prod.nome;
-    if (linha && aoAtualizar) aoAtualizar(linha);
+    r.nome = prod.nome; r.pergunta = null;
     aviso('Corrigido para ' + prod.nome + '.');
     desenhar();
   }
 
   // ✏️ digitar o nome certo.
   function editar(i) {
-    const r = recentes[i]; if (!r) return;
+    const r = previa[i]; if (!r) return;
     const novo = perguntar ? perguntar('Nome certo do item:', r.nome) : null;
     if (novo && String(novo).trim()) return aplicarCorrecao(i, String(novo).trim());
   }
@@ -139,13 +137,39 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, aoRemover, aoAt
     voz.iniciar(txt => aplicarCorrecao(i, txt), () => {}, { continuo: false, aoErro: aviso });
   }
 
-  // 🎤 Falar: fica ouvindo até tocar de novo; cada frase já vira itens na lista.
+  // Botão "Adicionar à lista": o que está na prévia (e no texto digitado) vai para a lista Hoje.
+  async function adicionar() {
+    const digitado = el('nr-texto').value;
+    if (digitado.trim()) { adicionarTexto(digitado); el('nr-texto').value = ''; }
+    if (sobra) { const resto = sobra; sobra = ''; adicionarTexto(resto); }
+    if (!previa.length) { aviso('Não achei itens. Escreva ou fale de novo.'); return 0; }
+    const pend = (getHoje ? getHoje() : []).filter(h => !h.done).slice();
+    const criados = [];
+    let repetidos = 0;
+    for (const it of previa) {
+      const prod = await produtos.garantir(it.nome);
+      if (!prod) continue;
+      if (pend.some(h => h.produto_id === prod.id || canon(h.nome) === canon(prod.nome))) { repetidos++; continue; }
+      const linha = await db.dbPost('lista_hoje', { nome: prod.nome, detalhe: it.detalhe || '', done: false, produto_id: prod.id, origem: 'anotada' });
+      if (!linha) continue;
+      criados.push(linha); pend.push(linha);
+    }
+    previa = [];
+    desenhar();
+    if (criados.length && aoAdicionar) aoAdicionar(criados);
+    if (criados.length) aviso(`${criados.length} item(ns) na lista.` + (repetidos ? ` ${repetidos} já estava(m).` : ''));
+    else aviso('Nada novo: esses itens já estão na lista.');
+    return criados.length;
+  }
+
+  // 🎤 Falar: fica ouvindo até tocar de novo; cada frase vai para a prévia.
   function alternarVoz() {
     const btn = el('nr-voz-btn');
     if (!voz || !voz.suportado) { aviso(SEM_VOZ); return; }
     if (ouvindo) {
-      voz.parar(); ouvindo = false; btn.textContent = '🎤 Falar'; aviso('');
+      voz.parar(); ouvindo = false; btn.textContent = '🎤 Falar';
       if (sobra) { const resto = sobra; sobra = ''; adicionarTexto(resto); } // frase que ficou no meio
+      aviso(previa.length ? 'Confira os itens e toque em Adicionar à lista.' : '');
       return;
     }
     ouvindo = true;
@@ -158,7 +182,7 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, aoRemover, aoAt
     );
   }
 
-  return { adicionar, adicionarTexto, adicionarFala, alternarVoz, corrigir, editar, remover };
+  return { adicionar, adicionarTexto, adicionarFala, alternarVoz, corrigir, editar, remover, responder };
 }
 
 if (typeof module !== 'undefined') module.exports = { createTelaListaRapida };

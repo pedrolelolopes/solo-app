@@ -36,3 +36,9 @@ Marque cada item depois de testar. Dados de teste inventados; nada de dados reai
 - [ ] Falar "preciso comprar filtro de papel" (pausa) "para café" → 1 item: "Filtro de papel para café" (frase que termina em "para/de" espera o resto).
 - [ ] Falar um remédio que o app errou (ex.: "Dexa"): tocar **✏️**, digitar o nome certo; falar de novo → já entra certo (o que foi ouvido vira apelido).
 - [ ] Nenhuma pergunta "Mesmo que...?" aparece na nota rápida.
+
+## Voz — rodada 3 (prévia só vira lista ao tocar Adicionar)
+- [ ] Falar vários itens: aparecem numa **prévia** (com ✏️ 🎤 ✕); a lista Hoje de baixo só muda quando tocar **Adicionar à lista**, e a prévia some.
+- [ ] "Chá pro Manuel" → item "Chá" com "(pro Manuel)"; depois "chá de cidreira, né" → pergunta "é o mesmo que Chá?"; Sim junta, ficando "Chá de cidreira (pro Manuel)".
+- [ ] "Leite" (segura) "sem lactose" → 1 item "Leite sem lactose" (sem "leites" repetido).
+- [ ] "né" no fim da frase é ignorado.
