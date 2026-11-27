@@ -6,6 +6,22 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Solo — Assistente de Compras</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script>
+// Diagnostico: mostra no topo da tela qualquer erro de script (ajuda a achar falhas no celular).
+(function(){
+  function mostrar(t){
+    var d=document.getElementById('diag-erro');
+    if(!d){d=document.createElement('div');d.id='diag-erro';d.style.cssText='position:fixed;left:0;right:0;top:0;z-index:9999;background:#ffeded;color:#b00020;font:12px monospace;padding:8px;white-space:pre-wrap;max-height:40vh;overflow:auto';(document.body||document.documentElement).appendChild(d);}
+    d.textContent+=t+' | ';
+  }
+  window.addEventListener('error',function(e){
+    var alvo=e.target;
+    if(alvo&&(alvo.src||alvo.href)&&alvo!==window)mostrar('Nao carregou: '+(alvo.src||alvo.href));
+    else mostrar('Erro: '+e.message+' ('+String(e.filename||'').split('/').pop()+':'+e.lineno+')');
+  },true);
+  window.addEventListener('unhandledrejection',function(e){mostrar('Erro: '+((e.reason&&e.reason.message)||e.reason));});
+})();
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f2f2f7;color:#1c1c1e}
@@ -1396,9 +1412,7 @@ Responda APENAS com array JSON, sem nenhum texto antes ou depois:
     await mostrarCupom();
   } catch(e) {
     console.error('lerCupom:',e);
-    alert('Erro ao processar: '+((e&&e.message)||e)+'
-
-Tente novamente com foto mais clara.');
+    alert('Erro ao processar: '+((e&&e.message)||e)+' - Tente novamente com foto mais clara.');
   }
   btn.disabled=false;btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';input.value='';
 }
