@@ -75,3 +75,17 @@ test('"tomate, aquele tomate pequenininho, tomate cereja": descrição some e o 
   assert.strictEqual(r[1].refina, true);
   assert.strictEqual(r.descricoes, 1);
 });
+
+test('"chá para o manuel" em minúscula também vira detalhe (nome desconhecido)', () => {
+  const k = CONHECIDOS.concat('chá', 'leite');
+  assert.deepStrictEqual(separarItensComDetalhe('chá para o manuel', k), [{ nome: 'chá', detalhe: 'para o manuel' }]);
+});
+test('minúscula que é produto conhecido não vira detalhe ("filtro para café")', () =>
+  assert.deepStrictEqual(separarItensComDetalhe('filtro para café', CONHECIDOS), [{ nome: 'filtro para café', detalhe: '' }]));
+test('hesitação "como é que é o nome?" some e o próximo item refina', () => {
+  const r = separarItensComDetalhe('tomate, aquele tomatinho pequeno, como é que é o nome? tomate cereja');
+  assert.deepStrictEqual(r.map(x => x.nome), ['tomate', 'tomate cereja']);
+  assert.strictEqual(r[1].refina, true);
+});
+test('hesitação sozinha numa frase não cria item', () =>
+  assert.deepStrictEqual(separarItens('como é que é o nome'), []));

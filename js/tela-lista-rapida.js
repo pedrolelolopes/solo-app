@@ -52,7 +52,7 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
           `<button onclick="TelaListaRapida.responder(${i},true)">Sim</button> ` +
           `<button onclick="TelaListaRapida.responder(${i},false)">Não</button></div>`
         : '';
-      return `<div class="nr-item"><span>${esc(r.nome)}</span>${r.detalhe ? ` <small>(${esc(r.detalhe)})</small>` : ''} ` +
+      return `<div class="nr-item"><span>${esc(r.nome)}</span>${r.detalhe ? ` <small class="nr-det" style="color:#FB5C32">📝 ${esc(r.detalhe)}</small>` : ''} ` +
         `<button onclick="TelaListaRapida.editar(${i})" aria-label="Digitar o nome certo">✏️</button> ` +
         `<button onclick="TelaListaRapida.corrigir(${i})" aria-label="Falar o nome certo">🎤</button> ` +
         `<button onclick="TelaListaRapida.remover(${i})" aria-label="Tirar">✕</button>${q}</div>`;

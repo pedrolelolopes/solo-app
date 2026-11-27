@@ -80,7 +80,7 @@ test('não duplica item já pendente na lista', async () => {
 test('"chá pro Manuel" guarda o Manuel como detalhe da linha', async () => {
   const { t, doc, calls, produtos } = mk(); await produtos.carregar();
   t.adicionarTexto('chá pro Manuel');
-  assert.match(previaTxt(doc), /chá \(pro Manuel\)/);
+  assert.match(previaTxt(doc), /chá 📝 pro Manuel/);
   await t.adicionar();
   assert.deepStrictEqual([linhas(calls)[0].nome, linhas(calls)[0].detalhe], ['Chá', 'pro Manuel']);
 });
@@ -250,6 +250,33 @@ test('"tomate, aquele tomate pequenininho, tomate cereja" (falado em partes) vir
 test('"tomate, aquele tomate pequenininho, tomate cereja" (digitado de uma vez) vira 1 item', async () => {
   const { t, calls, produtos } = mk(); await produtos.carregar();
   t.adicionarTexto('tomate, aquele tomate pequenininho, tomate cereja');
+  await t.adicionar();
+  assert.deepStrictEqual(linhas(calls).map(l => l.nome), ['Tomate cereja']);
+});
+
+test('voz: "chá para o manuel" (minúscula) vira Chá + lembrete e "chá de cidreira, né" pergunta se é o mesmo', async () => {
+  const { t, falar, doc, calls, produtos } = mkFala(); await produtos.carregar();
+  t.alternarVoz();
+  await falar('chá para o manuel');
+  assert.match(previaTxt(doc), /chá 📝 para o manuel/);
+  await falar('chá de cidreira, né');
+  assert.match(previaTxt(doc), /chá de cidreira é o mesmo que chá/);
+  t.responder(1, true);
+  await t.adicionar();
+  assert.deepStrictEqual([linhas(calls).length, linhas(calls)[0].nome, linhas(calls)[0].detalhe], [1, 'Chá de cidreira', 'para o manuel']);
+});
+test('voz: "tomate" e depois "aquele tomatinho pequeno, como é que é o nome? tomate cereja" vira "Tomate cereja"', async () => {
+  const { t, falar, calls, produtos } = mkFala(); await produtos.carregar();
+  t.alternarVoz();
+  await falar('tomate');
+  await falar('aquele tomatinho pequeno, como é que é o nome? tomate cereja');
+  await t.adicionar();
+  assert.deepStrictEqual(linhas(calls).map(l => l.nome), ['Tomate cereja']);
+});
+test('voz: tudo numa frase só ("tomate, aquele tomatinho pequeno, como é que é o nome? tomate cereja")', async () => {
+  const { t, falar, calls, produtos } = mkFala(); await produtos.carregar();
+  t.alternarVoz();
+  await falar('tomate, aquele tomatinho pequeno, como é que é o nome? tomate cereja');
   await t.adicionar();
   assert.deepStrictEqual(linhas(calls).map(l => l.nome), ['Tomate cereja']);
 });

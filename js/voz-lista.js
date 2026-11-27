@@ -82,13 +82,20 @@ function limparFala(trecho) {
 // e o trecho inteiro não é um nome conhecido, como "filtro de papel para café").
 function tirarDetalhe(trecho, set) {
   if (set && set.has(_NomesV.canonico(trecho))) return { nome: trecho, detalhe: '' };
-  const m = trecho.match(/^(.+?)\s+((?:pro|pra|para o|para a|para))\s+([A-ZÀ-Ý][A-Za-zÀ-ÿ]*(?:\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ]*)*)$/);
+  const m = trecho.match(/^(.+?)\s+(pro|pra|para o|para a|para)\s+(\S+(?:\s+\S+)?)$/i);
   if (!m || !_NomesV.normalizar(m[1])) return { nome: trecho, detalhe: '' };
+  const cauda = m[3].split(/\s+/);
+  const maiuscula = w => /^[A-ZÀ-Ý]/.test(w);
+  // com maiúscula (nome próprio) vale sempre; em minúscula só se nenhuma palavra for um produto que o app conhece
+  const nome = cauda.every(maiuscula) || (set && cauda.every(w => !set.has(_NomesV.canonico(w)) && !CONECT_VOZ.has(_NomesV.normalizar(w))));
+  if (!nome) return { nome: trecho, detalhe: '' };
   return { nome: m[1], detalhe: m[2] + ' ' + m[3] };
 }
 
 // "leite sem, quero dizer leite integral": o que vem depois do marcador corrige e o que veio antes é descartado.
 const MARCADOR_CORRECAO = /(?:^|\s)(?:quero dizer|quer dizer|ou melhor|melhor dizendo|na verdade|aliás|corrigindo|digo)(?:[,:]|\s|$)\s*/i;
+// "como é que é o nome?": a pessoa está tentando lembrar; não faz parte do item.
+const HESITACAO = /como (?:é|e) que (?:é|e) (?:o )?(?:nome|mesmo)|como (?:é|e) que se chama|como (?:é|e) mesmo|qual (?:é|e) (?:o )?(?:nome|mesmo)|como se chama|(?:não|nao) lembro(?: o nome)?|esqueci o nome|sei lá/gi;
 const DEMONSTRATIVOS = new Set(['aquele', 'aquela', 'aqueles', 'aquelas', 'aquilo', 'esse', 'essa', 'esses', 'essas', 'isso']);
 
 // Se o texto COMEÇA com um marcador de correção, devolve {corrige: true, resto}.
@@ -104,7 +111,7 @@ function tirarCorrecao(texto) {
 function separarItensComDetalhe(texto, conhecidos) {
   const set = conhecidos ? new Set([...conhecidos].map(c => _NomesV.canonico(c)).filter(Boolean)) : null;
   const brutos = [];
-  for (const p of String(texto || '').split(/[,;\n]+|\s+e\s+/i)) {
+  for (const p of String(texto || '').replace(HESITACAO, ',§,').split(/[,;\n]+|\s+e\s+/i)) {
     let t = p.trim();
     const m = t.match(MARCADOR_CORRECAO);
     if (m) {
@@ -112,13 +119,14 @@ function separarItensComDetalhe(texto, conhecidos) {
       if (!antes) brutos.pop();            // o trecho anterior era um engano
       t = t.slice(m.index + m[0].length).trim(); // dentro do mesmo trecho: vale só o que vem depois
     }
-    if (t) brutos.push(t);
+    if (t) brutos.push(t === '§' ? '§' : t);
   }
   const vistos = new Set();
   const saida = [];
   Object.defineProperty(saida, 'descricoes', { value: 0, writable: true, enumerable: false });
   let aposDescricao = false;
   for (const p of brutos) {
+    if (p === '§') { saida.descricoes++; aposDescricao = true; continue; } // hesitação: o próximo item refina o anterior
     const limpo = limparFala(limparTrecho(limparFala(p)));
     if (!_NomesV.normalizar(limpo)) continue;
     if (ENCHIMENTO_FIM.has(limpo.toLowerCase()) || ENCHIMENTO_INICIO.has(limpo.toLowerCase())) continue; // só enchimento ("né")
