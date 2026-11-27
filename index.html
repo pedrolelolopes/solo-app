@@ -285,15 +285,22 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 <div id="s-folhetos" class="screen">
   <p style="font-size:12px;color:#8e8e93;padding:8px 0 12px">Compare folhetos com sua lista permanente</p>
   <div class="card">
-    <div class="field"><label>Nome do mercado</label><input id="fol-mercado" placeholder="Ex: Atacadão"></div>
-    <button class="btn btn-p btn-bl" onclick="document.getElementById('fol-foto').click()" id="fol-btn">
-      <i class="ti ti-photo"></i>Adicionar folheto (foto)
+    <div class="field"><label>Nome do mercado</label><input id="fol-mercado" placeholder="Ex: Atacadão" oninput="TelaFolhetos.atualizarBotao()"></div>
+    <button class="btn btn-p btn-bl" onclick="document.getElementById('fol-foto').click()" id="fol-btn" disabled>
+      <i class="ti ti-photo"></i>Digite o nome do mercado primeiro
     </button>
-    <input id="fol-foto" type="file" accept="image/*" capture="environment" style="display:none" onchange="lerFolheto(this)">
+    <input id="fol-foto" type="file" multiple accept="image/*,application/pdf" style="display:none" onchange="TelaFolhetos.aoEscolherFotos(this)">
+    <input id="fol-pag" type="file" multiple accept="image/*,application/pdf" style="display:none" onchange="TelaFolhetos.aoEscolherPaginas(this)">
+    <button class="btn btn-s btn-bl" style="margin-top:8px" onclick="document.getElementById('fol-csv').click()" id="fol-csv-btn">
+      <i class="ti ti-file-spreadsheet"></i>Importar CSV
+    </button>
+    <input id="fol-csv" type="file" accept=".csv,text/csv" style="display:none" onchange="TelaFolhetos.aoEscolherCsv(this)">
+    <p id="fol-progresso" class="li-sub" style="margin-top:6px"></p>
+    <p id="fol-aviso" class="li-sub" style="white-space:normal;margin-top:4px"></p>
   </div>
   <div id="folhetos-list"></div>
   <div id="fol-cmp-wrap" style="display:none;margin-bottom:12px">
-    <button class="btn btn-p btn-bl" onclick="compararFolhetos()" id="fol-cmp-btn">
+    <button class="btn btn-p btn-bl" onclick="TelaFolhetos.comparar()" id="fol-cmp-btn">
       <i class="ti ti-chart-bar"></i>Comparar com minha lista
     </button>
   </div>
@@ -547,6 +554,8 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 <script src="js/texto-seguro.js"></script>
 <script src="js/unidades.js"></script>
 <script src="js/ia.js"></script>
+<script src="js/folhetos.js"></script>
+<script src="js/tela-folhetos.js"></script>
 <script>
 // ── CONFIG / LOGIN / BANCO (módulos em js/) ───────────────────────────
 const auth = SoloAuth.createAuth({
@@ -559,6 +568,7 @@ const { dbGet, dbPost, dbPatch, dbDel, claudeFetch } = SoloDb.createDb({
   onExpirada: () => mostrarLogin('Sua sessão expirou. Entre de novo (seu carrinho continua aberto).')
 });
 const ia = SoloIa.createIa({ claudeFetch });
+// TelaFolhetos é criada depois de claudeText/toB64/lista existirem (ver mais abaixo)
 
 // ── CLAUDE ───────────────────────────────────────────────────────────
 function extractJSON(text) {
@@ -633,7 +643,7 @@ function fmtN(v) {
 }
 
 // ── ESTADO ───────────────────────────────────────────────────────────
-let cart=[], lista=[], hojeList=[], folhetos=[];
+let cart=[], lista=[], hojeList=[];
 let receitas=[], cardapioSemana=[], ingredientesTemp=[], editReceitaId=null, celulaSelecionada=null, semanaOffset=0;
 let editCartId=null, editFixoId=null;
 let pendingCS=null, pendingFixo=null;
@@ -666,7 +676,7 @@ function showTab(id,el) {
   el.classList.add('active');
   if(id==='lista'){renderHoje();renderFixos();}
   if(id==='historico')renderHistorico();
-  if(id==='folhetos')renderFolhetos();
+  if(id==='folhetos')TelaFolhetos.abrir();
   if(id==='cardapio'){renderSemana();renderReceitas();}
 }
 function showSubtab(id,el) {
@@ -974,43 +984,12 @@ async function comparar() {
 }
 
 // ── FOLHETOS ─────────────────────────────────────────────────────────
-function renderFolhetos() {
-  const el=document.getElementById('folhetos-list');
-  el.innerHTML=folhetos.length?folhetos.map(f=>`
-    <div class="card" style="margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><div style="font-weight:500">${TextoSeguro.escapar(f.mercado)}</div><div class="li-sub">${f.itens.length} itens no folheto</div></div>
-        <button class="ico-btn" onclick="rmFolheto('${f.id}')"><i class="ti ti-x"></i></button>
-      </div>
-    </div>`).join(''):'<div class="empty"><i class="ti ti-file-x"></i><p>Nenhum folheto adicionado</p></div>';
-  document.getElementById('fol-cmp-wrap').style.display=folhetos.length>0&&lista.length>0?'block':'none';
-}
-async function lerFolheto(input) {
-  const file=input.files[0]; if(!file)return;
-  const mercado=document.getElementById('fol-mercado').value.trim();
-  if(!mercado){alert('Informe o nome do mercado primeiro.');input.value='';return;}
-  const btn=document.getElementById('fol-btn');
-  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>Lendo...';
-  try {
-    const b64=await toB64(file);
-    const resp=await claudeImg('Folheto promocional. Extraia produtos e preços. SOMENTE JSON válido: {"itens":[{"nome":"...","preco":0.00}]}',b64,file.type,SoloIa.MODELO_BARATO);
-    const p=extractJSON(resp);
-    if(p&&p.itens&&p.itens.length){folhetos.push({id:Date.now().toString(),mercado,itens:p.itens});document.getElementById('fol-mercado').value='';renderFolhetos();}
-    else{alert('Não consegui ler o folheto. Tente foto mais clara.');}
-  } catch(e) { alert('Erro: '+e.message); }
-  btn.disabled=false; btn.innerHTML='<i class="ti ti-photo"></i>Adicionar folheto (foto)';
-  input.value='';
-}
-function rmFolheto(id){folhetos=folhetos.filter(f=>f.id!==id);renderFolhetos();}
-async function compararFolhetos() {
-  const btn=document.getElementById('fol-cmp-btn');
-  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>Comparando...';
-  const lt=lista.map(i=>[i.nome,i.marca,(i.tamanho||'')+(i.unidade||'')].filter(Boolean).join(' ')).join('\n');
-  const ft=folhetos.map(f=>`=== ${f.mercado} ===\n${f.itens.map(i=>`${i.nome}: ${fmtBRL(i.preco)}`).join('\n')}`).join('\n\n');
-  const resp=await claudeText(`Minha lista:\n${lt}\n\n${ft}\n\nPara cada item da lista mostre o preço em cada mercado. Calcule total por mercado. Indique qual mercado ir e quanto economizaria. Use formato claro em português.`,600);
-  document.getElementById('fol-result').innerHTML=`<div class="card" style="font-size:13px;line-height:1.7">${resp?TextoSeguro.mdSimples(resp):'Sem resultado.'}</div>`;
-  btn.disabled=false; btn.innerHTML='<i class="ti ti-chart-bar"></i>Comparar com minha lista';
-}
+// Tela em js/tela-folhetos.js (criada aqui porque precisa de db, ia, toB64, claudeText e lista)
+const TelaFolhetos = createTelaFolhetos({
+  db: { dbGet, dbPost, dbPatch, dbDel }, ia, toB64, doc: document,
+  avisar: m => { const e = document.getElementById('fol-aviso'); if (e) e.textContent = m; },
+  getLista: () => lista, confirmar: m => confirm(m), claudeTexto: claudeText
+});
 
 // ── LISTA — HOJE ─────────────────────────────────────────────────────
 function updateAC() {
@@ -1329,6 +1308,7 @@ function trocarUsuario() {
   if (!confirm('Sair da conta?')) return;
   auth.signOut();
   currentUser = null;
+  TelaFolhetos.limpar();
   document.getElementById('login-email').value = '';
   document.getElementById('login-senha').value = '';
   mostrarLogin();
