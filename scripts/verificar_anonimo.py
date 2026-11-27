@@ -13,6 +13,7 @@ import urllib.request
 TABELAS = [
     "folhetos", "lista_permanente", "lista_hoje", "frequencia", "sessoes_compra",
     "itens_compra", "cardapio", "receitas", "ingredientes_receita",
+    "comparativos", "produtos", "lotes",
 ]
 
 
