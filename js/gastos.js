@@ -178,5 +178,14 @@ function diffItens(originais, editados) {
   return { alterar, remover, adicionar, total };
 }
 
-const _gastosApi = { diffItens, numeroCupom, normalizarCupom, aplicarDescontos, valorPorPeso, lerPesoG, classificarItem, resumoCompra, gastosPorProduto, prepararItensCompra, compararCupom };
+// Resposta da leitura da etiqueta de preço -> campos do formulário. porKg: preço da etiqueta é por kg (fruta, carne, frios).
+function interpretarEtiqueta(p) {
+  const o = p || {};
+  const limpo = v => (v === null || v === undefined || String(v).trim().toLowerCase() === 'null' ? '' : String(v).trim());
+  const unidade = limpo(o.unidade);
+  const porKg = o.preco_por_kg === true || String(o.preco_por_kg).toLowerCase() === 'true' || /^kg$/i.test(limpo(o.unidade_preco));
+  return { nome: limpo(o.nome), marca: limpo(o.marca), tamanho: limpo(o.tamanho), unidade, preco: numeroCupom(o.preco), porKg };
+}
+
+const _gastosApi = { interpretarEtiqueta, diffItens, numeroCupom, normalizarCupom, aplicarDescontos, valorPorPeso, lerPesoG, classificarItem, resumoCompra, gastosPorProduto, prepararItensCompra, compararCupom };
 if (typeof module !== 'undefined') module.exports = _gastosApi; else window.Gastos = _gastosApi;

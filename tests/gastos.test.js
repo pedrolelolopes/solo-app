@@ -50,3 +50,14 @@ test('gastosPorProduto agrupa nomes diferentes do mesmo produto_id e ordena por 
   assert.strictEqual(r[1].compras, 2);
   assert.strictEqual(r[1].total, 12);
 });
+
+const { interpretarEtiqueta } = require('../js/gastos.js');
+test('interpretarEtiqueta: produto de prateleira', () => {
+  const r = interpretarEtiqueta({ nome: 'Leite Integral', marca: 'Italac', tamanho: '1', unidade: 'L', preco: '5,99', preco_por_kg: false });
+  assert.deepStrictEqual(r, { nome: 'Leite Integral', marca: 'Italac', tamanho: '1', unidade: 'L', preco: 5.99, porKg: false });
+});
+test('interpretarEtiqueta: tomate a R$ 18/kg vira porKg e "null" vira vazio', () => {
+  const r = interpretarEtiqueta({ nome: 'Tomate', marca: 'null', tamanho: null, unidade: 'kg', preco: 18, preco_por_kg: true });
+  assert.deepStrictEqual([r.nome, r.marca, r.tamanho, r.preco, r.porKg], ['Tomate', '', '', 18, true]);
+});
+test('interpretarEtiqueta: resposta vazia não lança', () => assert.strictEqual(interpretarEtiqueta(null).nome, ''));

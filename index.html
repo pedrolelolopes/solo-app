@@ -970,30 +970,37 @@ async function lerFoto(input) {
     const prompt=`Analise esta etiqueta de preço de supermercado brasileiro e extraia as informações do produto.
 Responda APENAS com JSON válido, sem texto extra:
 {
-  "nome": "nome genérico do produto sem marca (ex: Leite Integral, Arroz Agulhinha)",
+  "nome": "nome genérico do produto sem marca (ex: Leite Integral, Arroz Agulhinha, Tomate)",
   "marca": "marca do produto ou null",
-  "tamanho": "número da quantidade (ex: 1, 500, 200) ou null",
-  "unidade": "unidade de venda: g, kg, ml, L, un, pç, cx, pct ou null",
-  "preco": 0.00
+  "tamanho": "número da quantidade da embalagem (ex: 1, 500, 200) ou null",
+  "unidade": "unidade da embalagem: g, kg, ml, L, un, pç, cx, pct ou null",
+  "preco": 0.00,
+  "preco_por_kg": true se o preço da etiqueta é POR QUILO (produto vendido a peso: frutas, verduras, carnes, frios, padaria), senão false
 }`;
     const resp=(await ia.claudeArquivo({prompt, b64, mime:file.type, model:SoloIa.MODELO_BARATO, maxTokens:300})).texto;
-    const p=extractJSON(resp);
-    if(p && p.nome) {
-      document.getElementById('c-nome').value = p.nome;
-      if(p.marca && p.marca !== 'null') document.getElementById('c-marca').value = p.marca;
-      if(p.tamanho && p.tamanho !== 'null') document.getElementById('c-tamanho').value = p.tamanho;
-      if(p.unidade && p.unidade !== 'null') {
-        const sel = document.getElementById('c-unidade');
-        // Tenta selecionar a unidade no dropdown
-        for(let i=0; i<sel.options.length; i++) {
-          if(sel.options[i].value.toLowerCase() === String(p.unidade).toLowerCase()) {
-            sel.selectedIndex = i; break;
+    const e=Gastos.interpretarEtiqueta(extractJSON(resp));
+    if(e.nome) {
+      document.getElementById('c-nome').value = e.nome;
+      if(e.marca) document.getElementById('c-marca').value = e.marca;
+      if(e.porKg) {
+        // vendido a peso: já muda para "Por peso" com o preço por kg; falta só o peso
+        setModoPeso(true);
+        if(e.preco) setPriceVal('c-preco-kg', e.preco);
+        document.getElementById('c-peso').focus();
+        pesoAoVivo();
+      } else {
+        setModoPeso(false);
+        if(e.tamanho) document.getElementById('c-tamanho').value = e.tamanho;
+        if(e.unidade) {
+          const sel = document.getElementById('c-unidade');
+          for(let i=0; i<sel.options.length; i++) {
+            if(sel.options[i].value.toLowerCase() === e.unidade.toLowerCase()) { sel.selectedIndex = i; break; }
           }
         }
+        if(e.preco) setPriceVal('c-preco', e.preco);
       }
-      if(p.preco) setPriceVal('c-preco', p.preco);
     } else {
-      alert('Não consegui ler a etiqueta.\n\nDicas:\n• Boa iluminação\n• Sem reflexo\n• Câmera estável e próxima');
+      alert('Não consegui ler a etiqueta. Tente com boa luz, sem reflexo e a câmera estável e próxima.');
     }
   } catch(e) {
     alert('Erro ao ler foto: '+e.message);
