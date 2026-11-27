@@ -25,3 +25,9 @@ Marque cada item depois de testar. Dados de teste inventados; nada de dados reai
 - [ ] **Cadastrar compra do cupom:** foto de cupom de farmácia → conferir itens (editar nome/preço/qtd), escolher Local = Farmácia, data → responder Essencial/Supérfluo nos itens novos → Salvar. Ver a compra no Histórico (com o local) e os lotes na aba Produtos.
 - [ ] **Conferir compra:** montar um carrinho com 1 preço errado de propósito, fotografar o cupom → ver "Preço diferente", "Só no cupom", "Só no app" e a diferença total; **Corrigir pelo cupom** (pede confirmação para remover). Repetir escolhendo uma compra do Histórico.
 - [ ] No iPhone: o total do carrinho fica visível ao rolar a aba Comprar (barra fixa embaixo das abas). Se cobrir algo, avisar.
+
+## Voz na nota rápida (ajuste pedido pelo Pedro)
+- [ ] Tocar **🎤 Falar** sem clicar na caixa: aparece "Ouvindo..."; falar "preciso comprar café, manteiga, desodorante" → itens entram sozinhos na lista; o botão vira **⏹ Parar** e o microfone continua ligado (até 5 min) mesmo com pausas.
+- [ ] Falar "papel manteiga" → 1 item só. Falar "café manteiga desodorante" sem pausa → 3 itens.
+- [ ] Item errado: ✕ remove; 🎤 ao lado do item e falar o nome certo corrige.
+- [ ] iPhone/Safari: se o microfone parar sozinho, anotar quanto tempo durou e se pediu permissão de novo.

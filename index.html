@@ -367,8 +367,7 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
       <textarea id="nr-texto" rows="2" style="width:100%" placeholder="Ex.: papel higiênico, filtro de café e sabonete"></textarea>
       <div class="btn-row" style="margin-top:8px">
         <button class="btn btn-s btn-sm" id="nr-voz-btn" style="flex:1" onclick="TelaListaRapida.alternarVoz()">🎤 Falar</button>
-        <button class="btn btn-s btn-sm" style="flex:1" onclick="TelaListaRapida.analisar()">Conferir</button>
-        <button class="btn btn-p btn-sm" id="nr-adicionar-btn" style="flex:1" onclick="TelaListaRapida.confirmar()">Adicionar à lista</button>
+        <button class="btn btn-p btn-sm" id="nr-adicionar-btn" style="flex:1" onclick="TelaListaRapida.adicionar()">Adicionar à lista</button>
       </div>
       <div id="nr-aviso" style="font-size:13px;color:#8e8e93;margin-top:6px"></div>
       <div id="nr-revisao" style="margin-top:6px"></div>
@@ -621,6 +620,7 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 <script src="js/nomes.js"></script>
 <script src="js/produtos.js"></script>
 <script src="js/voz-lista.js"></script>
+<script src="js/dicionario.js"></script>
 <script src="js/gastos.js"></script>
 <script src="js/lotes.js"></script>
 <script src="js/tela-produtos.js"></script>
@@ -1162,16 +1162,41 @@ const TelaFolhetos = createTelaFolhetos({
 const produtos = SoloProdutos.createProdutos({ db: { dbGet, dbPost, dbPatch, dbDel } });
 const vozNota = (() => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let rec = null;
+  const LIMITE_MS = 5 * 60 * 1000; // ouve até 5 minutos seguidos
+  let rec = null, querOuvir = false;
   return {
     suportado: !!SR,
-    iniciar(aoTexto, aoFim) {
-      rec = new SR(); rec.lang = 'pt-BR'; rec.continuous = false; rec.interimResults = false;
-      rec.onresult = e => { aoTexto(Array.from(e.results).map(r => r[0].transcript).join(' ')); };
-      rec.onend = () => aoFim(); rec.onerror = () => aoFim();
-      rec.start();
+    // continua ouvindo (reabre sozinho quando o navegador corta por silêncio) até parar() ou o limite
+    iniciar(aoFinal, aoFim, op = {}) {
+      const continuo = op.continuo !== false;
+      const inicio = Date.now();
+      querOuvir = true;
+      const abrir = () => {
+        rec = new SR(); rec.lang = 'pt-BR'; rec.continuous = continuo; rec.interimResults = !!op.aoParcial;
+        rec.onresult = e => {
+          let parcial = '';
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const r = e.results[i];
+            if (r.isFinal) aoFinal(r[0].transcript); else parcial += r[0].transcript;
+          }
+          if (op.aoParcial) op.aoParcial(parcial);
+        };
+        rec.onerror = e => {
+          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+            querOuvir = false;
+            if (op.aoErro) op.aoErro('Permita o microfone para este site (Ajustes do Safari) e tente de novo.');
+          }
+        };
+        rec.onend = () => {
+          if (querOuvir && continuo && Date.now() - inicio < LIMITE_MS) {
+            setTimeout(() => { if (querOuvir) { try { abrir(); } catch (err) { querOuvir = false; aoFim(); } } }, 250);
+          } else { querOuvir = false; aoFim(); }
+        };
+        rec.start();
+      };
+      abrir();
     },
-    parar() { if (rec) rec.stop(); }
+    parar() { querOuvir = false; if (rec) { try { rec.stop(); } catch (err) {} } }
   };
 })();
 const hojeLocal = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -1182,7 +1207,9 @@ const TelaProdutos = createTelaProdutos({
 const TelaListaRapida = createTelaListaRapida({
   db: { dbGet, dbPost, dbPatch, dbDel }, produtos, doc: document, voz: vozNota,
   getHoje: () => hojeList,
-  aoAdicionar: criados => { hojeList.push(...criados); renderHoje(); renderQueue(); }
+  aoAdicionar: criados => { hojeList.push(...criados); renderHoje(); renderQueue(); },
+  aoRemover: id => { hojeList = hojeList.filter(i => i.id !== id); renderHoje(); renderQueue(); },
+  aoAtualizar: linha => { const k = hojeList.findIndex(i => i.id === linha.id); if (k !== -1) hojeList[k] = { ...hojeList[k], ...linha }; renderHoje(); renderQueue(); }
 });
 
 // ── LISTA — HOJE ─────────────────────────────────────────────────────
