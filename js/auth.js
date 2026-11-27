@@ -29,19 +29,25 @@ function createAuth({ url, anonKey, storage, fetchFn, agora }) {
     catch { return { ok: false, erro: 'Não foi possível entrar. Tente de novo.' }; }
   }
 
-  async function getAccessToken() {
-    const s = ler();
-    if (!s || !s.access_token) return null;
-    if (s.expires_at - agora() > 60) return s.access_token;
+  let renovando = null;
+  async function renovar(s) {
     let r;
     try { r = await pedir('refresh_token', { refresh_token: s.refresh_token }); }
     catch {
       // sem internet: nao derruba a sessao; usa o token enquanto ainda valer
       return s.expires_at > agora() ? s.access_token : null;
     }
-    if (!r.ok) { storage.removeItem(CHAVE); return null; }
+    if (r.status === 400 || r.status === 401) { storage.removeItem(CHAVE); return null; }
+    if (!r.ok) return null;
     try { return guardar(await r.json()).access_token; }
-    catch { storage.removeItem(CHAVE); return null; }
+    catch { return null; }
+  }
+  async function getAccessToken() {
+    const s = ler();
+    if (!s || !s.access_token) return null;
+    if (s.expires_at - agora() > 60) return s.access_token;
+    if (!renovando) renovando = renovar(s).finally(() => { renovando = null; });
+    return renovando;
   }
 
   function getUsuario() { const s = ler(); return s && s.usuario ? s.usuario : null; }

@@ -25,11 +25,11 @@ function createDb({ url, anonKey, getToken, fetchFn, onExpirada }) {
     } catch { return null; }
   }
   const dbPost = (t, data) => enviar('POST', t, data);
-  const dbPatch = (t, id, data) => enviar('PATCH', `${t}?id=eq.${id}`, data);
+  const dbPatch = (t, id, data) => enviar('PATCH', `${t}?id=eq.${encodeURIComponent(id)}`, data);
   async function dbDel(t, id) {
     try {
       const h = await cab(); if (!h) return;
-      await fetchFn(`${url}/rest/v1/${t}?id=eq.${id}`, { method: 'DELETE', headers: h });
+      await fetchFn(`${url}/rest/v1/${t}?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE', headers: h });
     } catch {}
   }
   async function claudeFetch(body) {
