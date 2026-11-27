@@ -31,3 +31,10 @@ test('respeita max e ordena por palavras em comum', () => {
   assert.strictEqual(r[0].produto.nome, 'Leite integral caixa');
 });
 test('texto vazio devolve []', () => assert.deepStrictEqual(sugerirProdutos('  ', [P('Leite')]), []));
+
+test('igual ignora "de/da/do/para" (filtro papel café = filtro de papel para café)', () => {
+  const r = sugerirProdutos('filtro papel café', [P('Filtro de papel para café')]);
+  assert.deepStrictEqual(r.map(x => x.motivo), ['igual']);
+});
+test('"sem" e "com" continuam diferenciando', () =>
+  assert.deepStrictEqual(sugerirProdutos('leite com lactose', [P('Leite sem lactose')]).map(x => x.motivo), ['parecido']));

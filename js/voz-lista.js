@@ -9,7 +9,8 @@ const PREFIXOS_VOZ = ['eu preciso lembrar de comprar', 'preciso lembrar de compr
   'acabou', 'adicionar', 'comprar', 'faltou', 'falta', 'anotar', 'anota'];
 const ARTIGOS_VOZ = ['o', 'a', 'os', 'as', 'um', 'uma'];
 const LIGACAO_VOZ = new Set(['de', 'da', 'do', 'com', 'sem', 'e']);
-const MAX_PALAVRAS_NOME = 5;
+const MAX_PALAVRAS_NOME = 6;
+const CONECT_VOZ = new Set(['de', 'da', 'do', 'das', 'dos', 'para', 'pra']);
 
 function limparTrecho(t) {
   let s = t.trim();
@@ -38,7 +39,9 @@ function segmentarConhecidos(trecho, conhecidos) {
   for (let i = 0; i < palavras.length;) {
     let achou = 0;
     for (let n = Math.min(MAX_PALAVRAS_NOME, palavras.length - i); n >= 1; n--) {
-      if (conhecidos.has(norm.slice(i, i + n).join(' '))) { achou = n; break; }
+      const janela = norm.slice(i, i + n);
+      if (CONECT_VOZ.has(janela[0]) || CONECT_VOZ.has(janela[n - 1])) continue; // nome não começa nem termina em "de/para"
+      if (conhecidos.has(_NomesV.canonico(janela.join(' ')))) { achou = n; break; }
     }
     if (achou) { soltarResto(); partes.push({ texto: palavras.slice(i, i + achou).join(' '), conhecido: true }); i += achou; }
     else { resto.push(palavras[i]); i++; }
@@ -57,7 +60,7 @@ function segmentarConhecidos(trecho, conhecidos) {
 }
 
 function separarItens(texto, conhecidos) {
-  const set = conhecidos ? new Set([...conhecidos].map(c => _NomesV.normalizar(c)).filter(Boolean)) : null;
+  const set = conhecidos ? new Set([...conhecidos].map(c => _NomesV.canonico(c)).filter(Boolean)) : null;
   const partes = String(texto || '').split(/[,;\n]+|\s+e\s+/i);
   const vistos = new Set();
   const saida = [];

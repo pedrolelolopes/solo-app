@@ -7,7 +7,7 @@ function mkDoc() {
   const els = {};
   return { els, getElementById(id) { return els[id] || (els[id] = { innerHTML: '', textContent: '', value: '' }); } };
 }
-function mk({ prods = [], hoje = [], voz } = {}) {
+function mk({ prods = [], hoje = [], voz, resposta } = {}) {
   const calls = { post: [], patch: [], del: [], add: [], rem: [], upd: [] };
   let n = 0;
   const banco = prods.map(p => ({ apelidos: [], ...p }));
@@ -20,7 +20,7 @@ function mk({ prods = [], hoje = [], voz } = {}) {
   const produtos = createProdutos({ db });
   const doc = mkDoc();
   const t = createTelaListaRapida({
-    db, produtos, doc, voz, getHoje: () => hoje,
+    db, produtos, doc, voz, getHoje: () => hoje, perguntar: () => resposta,
     aoAdicionar: l => calls.add.push(...l), aoRemover: id => calls.rem.push(id), aoAtualizar: l => calls.upd.push(l),
   });
   return { t, calls, doc, produtos };
@@ -57,24 +57,20 @@ test('não duplica item já pendente na lista', async () => {
   assert.strictEqual(await t.adicionar(), 1);
   assert.strictEqual(calls.post.filter(c => c[0] === 'lista_hoje').length, 1);
 });
-test('nome parecido entra na lista e pergunta "Mesmo que"; Sim junta e guarda apelido', async () => {
+test('nome parecido não pergunta nada: entra como item novo', async () => {
   const { t, doc, calls, produtos } = mk({ prods: [{ id: 'p1', nome: 'Leite sem lactose', chave: 'leite sem lactose' }] });
   await produtos.carregar();
   await t.adicionarTexto('leite 0');
-  assert.strictEqual(calls.post.filter(c => c[0] === 'produtos').length, 0);
-  assert.match(doc.els['nr-revisao'].innerHTML, /Mesmo que <strong>Leite sem lactose<\/strong>/);
-  await t.responder(0, true);
-  assert.deepStrictEqual(calls.patch.find(c => c[0] === 'lista_hoje'), ['lista_hoje', 'lista_hoje1', { nome: 'Leite sem lactose', produto_id: 'p1' }]);
-  assert.deepStrictEqual(calls.patch.find(c => c[0] === 'produtos'), ['produtos', 'p1', { apelidos: ['leite 0'] }]);
   assert.ok(!doc.els['nr-revisao'].innerHTML.includes('Mesmo que'));
+  assert.strictEqual(calls.post.filter(c => c[0] === 'lista_hoje').length, 1);
+  assert.strictEqual(calls.post.find(c => c[0] === 'lista_hoje')[1].nome, 'Leite 0');
 });
-test('Não cria o produto novo e liga à linha', async () => {
-  const { t, calls, produtos } = mk({ prods: [{ id: 'p1', nome: 'Leite sem lactose', chave: 'leite sem lactose' }] });
+test('"filtro papel café" é o mesmo produto de "Filtro de papel para café"', async () => {
+  const { t, calls, produtos } = mk({ prods: [{ id: 'p1', nome: 'Filtro de papel para café', chave: 'filtro de papel para cafe' }] });
   await produtos.carregar();
-  await t.adicionarTexto('leite 0');
-  await t.responder(0, false);
-  assert.strictEqual(calls.post.filter(c => c[0] === 'produtos').length, 1);
-  assert.strictEqual(calls.patch.find(c => c[0] === 'lista_hoje')[2].produto_id, 'produtos2');
+  await t.adicionarTexto('filtro papel café');
+  assert.strictEqual(calls.post.filter(c => c[0] === 'produtos').length, 0);
+  assert.strictEqual(calls.post.find(c => c[0] === 'lista_hoje')[1].produto_id, 'p1');
 });
 test('remover apaga a linha e avisa a tela', async () => {
   const { t, calls, produtos } = mk(); await produtos.carregar();
@@ -133,4 +129,62 @@ test('nome com HTML aparece escapado na prévia', async () => {
   await t.adicionarTexto('<img src=x onerror=alert(1)>');
   assert.ok(!doc.els['nr-revisao'].innerHTML.includes('<img'));
   assert.match(doc.els['nr-revisao'].innerHTML, /&lt;img/);
+});
+
+function mkFala() {
+  let aoFinal;
+  const voz = { suportado: true, iniciar: (a) => { aoFinal = a; }, parar() {} };
+  return { voz, falar: t => aoFinal(t) };
+}
+test('frase que termina em "para" espera o resto: "filtro de papel para" + "café" = 1 item', async () => {
+  const { voz, falar } = mkFala();
+  const { t, calls, produtos } = mk({ voz }); await produtos.carregar();
+  t.alternarVoz();
+  await falar('preciso comprar filtro de papel para');
+  assert.strictEqual(calls.post.filter(c => c[0] === 'lista_hoje').length, 0);
+  await falar('café');
+  const nomes = calls.post.filter(c => c[0] === 'lista_hoje').map(c => c[1].nome);
+  assert.deepStrictEqual(nomes, ['Filtro de papel para café']);
+});
+test('"filtro de papel" + pausa + "café" junta num item conhecido', async () => {
+  const { voz, falar } = mkFala();
+  const { t, calls, produtos } = mk({ voz }); await produtos.carregar();
+  t.alternarVoz();
+  await falar('filtro de papel');
+  await falar('café');
+  assert.strictEqual(calls.post.filter(c => c[0] === 'lista_hoje').length, 1);
+  const p = calls.patch.find(c => c[0] === 'lista_hoje');
+  assert.strictEqual(p[2].nome, 'Filtro de papel café');
+});
+test('parar com frase no meio ainda cria o item', async () => {
+  const { voz, falar } = mkFala();
+  const { t, calls, produtos } = mk({ voz }); await produtos.carregar();
+  t.alternarVoz();
+  await falar('manteiga e');
+  t.alternarVoz();
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(calls.post.some(c => c[0] === 'lista_hoje'));
+});
+test('corrigir ensina: o que foi ouvido vira apelido do produto certo', async () => {
+  const { t, calls, produtos } = mk({ resposta: 'Dexa' }); await produtos.carregar();
+  await t.adicionarTexto('deixa');
+  await t.editar(0);
+  const p = calls.patch.find(c => c[0] === 'lista_hoje');
+  assert.strictEqual(p[2].nome, 'Dexa');
+  const ap = calls.patch.find(c => c[0] === 'produtos');
+  assert.deepStrictEqual(ap[2], { apelidos: ['deixa'] });
+});
+test('depois de ensinado, "deixa" vira Dexa sozinho', async () => {
+  const { t, calls, produtos } = mk({ prods: [{ id: 'p9', nome: 'Dexa', chave: 'dexa', apelidos: ['deixa'] }] });
+  await produtos.carregar();
+  await t.adicionarTexto('deixa');
+  const linha = calls.post.find(c => c[0] === 'lista_hoje')[1];
+  assert.strictEqual(linha.nome, 'Dexa');
+  assert.strictEqual(linha.produto_id, 'p9');
+});
+test('editar sem digitar nada não muda nada', async () => {
+  const { t, calls, produtos } = mk({ resposta: '' }); await produtos.carregar();
+  await t.adicionarTexto('sabonete');
+  await t.editar(0);
+  assert.strictEqual(calls.patch.length, 0);
 });

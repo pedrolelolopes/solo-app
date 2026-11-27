@@ -6,6 +6,12 @@ function normalizarNome(texto) {
   return String(texto).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+// Forma comparável: sem acento e sem "de/da/do/para": "filtro de papel para café" = "filtro papel café".
+const CONECTORES_CANON = new Set(['de', 'da', 'do', 'das', 'dos', 'para', 'pra']);
+function canonicoNome(texto) {
+  return normalizarNome(texto).split(' ').filter(w => w && !CONECTORES_CANON.has(w)).join(' ');
+}
+
 function palavrasNome(texto) {
   return new Set(normalizarNome(texto).split(' ').filter(w => w.length >= 3 && !LIGACAO_NOME.has(w)));
 }
@@ -14,7 +20,9 @@ function sugerirProdutos(texto, produtos, max = 3) {
   const n = normalizarNome(texto);
   if (!n) return [];
   const lista = produtos || [];
-  const igual = lista.find(p => p.chave === n || (p.apelidos || []).some(a => normalizarNome(a) === n));
+  const c = canonicoNome(n);
+  const igual = lista.find(p => p.chave === n || (p.apelidos || []).some(a => normalizarNome(a) === n))
+    || (c ? lista.find(p => canonicoNome(p.chave) === c || (p.apelidos || []).some(a => canonicoNome(a) === c)) : null);
   if (igual) return [{ produto: igual, motivo: 'igual' }];
   const mias = palavrasNome(n);
   return lista
@@ -30,5 +38,5 @@ function sugerirProdutos(texto, produtos, max = 3) {
     .map(({ produto, motivo }) => ({ produto, motivo }));
 }
 
-if (typeof module !== 'undefined') module.exports = { normalizar: normalizarNome, palavras: palavrasNome, sugerirProdutos };
-else window.Nomes = { normalizar: normalizarNome, palavras: palavrasNome, sugerirProdutos };
+if (typeof module !== 'undefined') module.exports = { normalizar: normalizarNome, canonico: canonicoNome, palavras: palavrasNome, sugerirProdutos };
+else window.Nomes = { normalizar: normalizarNome, canonico: canonicoNome, palavras: palavrasNome, sugerirProdutos };

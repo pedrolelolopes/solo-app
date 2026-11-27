@@ -1206,7 +1206,7 @@ const TelaProdutos = createTelaProdutos({
 });
 const TelaListaRapida = createTelaListaRapida({
   db: { dbGet, dbPost, dbPatch, dbDel }, produtos, doc: document, voz: vozNota,
-  getHoje: () => hojeList,
+  getHoje: () => hojeList, perguntar: (m, v) => prompt(m, v),
   aoAdicionar: criados => { hojeList.push(...criados); renderHoje(); renderQueue(); },
   aoRemover: id => { hojeList = hojeList.filter(i => i.id !== id); renderHoje(); renderQueue(); },
   aoAtualizar: linha => { const k = hojeList.findIndex(i => i.id === linha.id); if (k !== -1) hojeList[k] = { ...hojeList[k], ...linha }; renderHoje(); renderQueue(); }

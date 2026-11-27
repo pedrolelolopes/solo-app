@@ -16,6 +16,10 @@ const ITENS_COMUNS_SOLO = [
   'frango', 'peito de frango', 'carne moida', 'carne', 'bife', 'linguica', 'salsicha', 'presunto', 'mortadela', 'bacon', 'peixe', 'tilapia',
   'tomate', 'cebola', 'alho', 'batata', 'cenoura', 'alface', 'banana', 'maca', 'laranja', 'limao', 'mamao', 'abacate', 'melancia', 'uva',
   'agua', 'agua mineral', 'agua com gas', 'suco', 'refrigerante', 'cerveja', 'vinho', 'cha', 'cha mate', 'gelo',
+  'filtro de papel para cafe', 'coador de cafe',
+  'dipirona', 'paracetamol', 'ibuprofeno', 'dorflex', 'neosaldina', 'torsilax', 'buscopan', 'omeprazol', 'loratadina', 'dramin',
+  'sal de fruta', 'eno', 'curativo', 'band aid', 'esparadrapo', 'gaze', 'termometro', 'soro fisiologico', 'vitamina c', 'vitamina d',
+  'omega 3', 'colirio', 'pomada', 'repelente', 'antialergico', 'anti inflamatorio', 'analgesico', 'xarope', 'pastilha para garganta',
   'pilha', 'lampada', 'fosforo', 'vela', 'cola', 'fita adesiva', 'ovo de pascoa', 'racao', 'areia de gato',
 ];
 if (typeof module !== 'undefined') module.exports = { ITENS_COMUNS: ITENS_COMUNS_SOLO }; else window.Dicionario = { ITENS_COMUNS: ITENS_COMUNS_SOLO };

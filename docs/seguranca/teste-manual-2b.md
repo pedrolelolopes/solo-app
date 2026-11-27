@@ -31,3 +31,8 @@ Marque cada item depois de testar. Dados de teste inventados; nada de dados reai
 - [ ] Falar "papel manteiga" → 1 item só. Falar "café manteiga desodorante" sem pausa → 3 itens.
 - [ ] Item errado: ✕ remove; 🎤 ao lado do item e falar o nome certo corrige.
 - [ ] iPhone/Safari: se o microfone parar sozinho, anotar quanto tempo durou e se pediu permissão de novo.
+
+## Voz — rodada 2 (sem perguntas, aprende nomes)
+- [ ] Falar "preciso comprar filtro de papel" (pausa) "para café" → 1 item: "Filtro de papel para café" (frase que termina em "para/de" espera o resto).
+- [ ] Falar um remédio que o app errou (ex.: "Dexa"): tocar **✏️**, digitar o nome certo; falar de novo → já entra certo (o que foi ouvido vira apelido).
+- [ ] Nenhuma pergunta "Mesmo que...?" aparece na nota rápida.
