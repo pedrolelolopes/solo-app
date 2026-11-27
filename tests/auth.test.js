@@ -54,6 +54,18 @@ test('getAccessToken devolve null e apaga a sessão quando a renovação falha',
   assert.strictEqual(await a.getAccessToken(), null);
   assert.strictEqual(st.getItem('solo-session'), null);
 });
+test('duas chamadas simultâneas fazem uma renovação', async () => {
+  const st = mem({ 'solo-session': sessao(1030) }); let n = 0;
+  const a = mk(async () => { n++; await new Promise(r => setTimeout(r, 10)); return resp(200, OK); }, st);
+  const [x, y] = await Promise.all([a.getAccessToken(), a.getAccessToken()]);
+  assert.strictEqual(n, 1); assert.strictEqual(x, 'tok1'); assert.strictEqual(y, 'tok1');
+});
+test('renovação com 500 não apaga a sessão', async () => {
+  const st = mem({ 'solo-session': sessao(1030) });
+  const a = mk(async () => resp(500, {}), st);
+  assert.strictEqual(await a.getAccessToken(), null);
+  assert.notStrictEqual(st.getItem('solo-session'), null);
+});
 test('getAccessToken sem sessão devolve null', async () => {
   assert.strictEqual(await mk(async () => resp(200, OK), mem()).getAccessToken(), null);
 });

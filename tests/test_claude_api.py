@@ -75,3 +75,25 @@ def test_verificar_usuario_token_invalido_devolve_none():
 
 def test_limite_do_corpo_aceita_foto_reduzida():
     assert 1_000_000 <= m.LIMITE_CORPO_BYTES <= 4_500_000
+
+
+def test_campo_extra_erra(): assert m.validar_corpo(corpo(stream=True)) is not None
+
+
+def test_documento_pdf_passa():
+    msg = [{"role": "user", "content": [
+        {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": "QUJD"}},
+        {"type": "text", "text": "oi"}]}]
+    assert m.validar_corpo(corpo(messages=msg)) is None
+
+
+def test_bloco_desconhecido_erra():
+    msg = [{"role": "user", "content": [{"type": "tool_result", "content": "x"}]}]
+    assert m.validar_corpo(corpo(messages=msg)) is not None
+
+
+def test_mapear_status_anthropic():
+    assert m.mapear_status(401) == 502
+    assert m.mapear_status(403) == 502
+    assert m.mapear_status(429) == 429
+    assert m.mapear_status(200) == 200

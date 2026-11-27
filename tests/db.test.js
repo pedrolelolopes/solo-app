@@ -31,6 +31,11 @@ test('dbPatch usa ?id=eq.<id> e devolve a linha', async () => {
   assert.deepStrictEqual(await db.dbPatch('t', 5, { a: 2 }), { id: 5 });
   assert.match(u2, /\/rest\/v1\/t\?id=eq\.5$/);
 });
+test('dbPatch codifica o id', async () => {
+  let u2; const db = mk(async (u) => { u2 = u; return R(true, [{ id: 'a b' }]); });
+  await db.dbPatch('t', 'a b', { a: 2 });
+  assert.match(u2, /\?id=eq\.a%20b$/);
+});
 test('dbDel não lança quando o fetch falha', async () => {
   await mk(async () => { throw new Error('x'); }).dbDel('t', 1);
 });

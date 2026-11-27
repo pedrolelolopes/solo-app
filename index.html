@@ -6,6 +6,22 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Solo — Assistente de Compras</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script>
+// Diagnostico: mostra no topo da tela qualquer erro de script (ajuda a achar falhas no celular).
+(function(){
+  function mostrar(t){
+    var d=document.getElementById('diag-erro');
+    if(!d){d=document.createElement('div');d.id='diag-erro';d.style.cssText='position:fixed;left:0;right:0;top:0;z-index:9999;background:#ffeded;color:#b00020;font:12px monospace;padding:8px;white-space:pre-wrap;max-height:40vh;overflow:auto';(document.body||document.documentElement).appendChild(d);}
+    d.textContent+=t+' | ';
+  }
+  window.addEventListener('error',function(e){
+    var alvo=e.target;
+    if(alvo&&(alvo.src||alvo.href)&&alvo!==window)mostrar('Nao carregou: '+(alvo.src||alvo.href));
+    else mostrar('Erro: '+e.message+' ('+String(e.filename||'').split('/').pop()+':'+e.lineno+')');
+  },true);
+  window.addEventListener('unhandledrejection',function(e){mostrar('Erro: '+((e.reason&&e.reason.message)||e.reason));});
+})();
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f2f2f7;color:#1c1c1e}
@@ -35,7 +51,7 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 .qty-ctrl{display:flex;align-items:center;border:1px solid #e5e5ea;border-radius:8px;overflow:hidden;height:42px}
 .qty-ctrl button{width:42px;height:42px;background:#f2f2f7;border:none;font-size:22px;cursor:pointer;flex-shrink:0;color:#1c1c1e;display:flex;align-items:center;justify-content:center}
 .qty-ctrl input{border:none;border-radius:0;text-align:center;background:#fff;height:42px;font-size:15px;width:60px}
-.total-bar{text-align:center;padding:16px 0 12px}
+.total-bar{text-align:center;padding:8px 0 6px;position:sticky;top:54px;z-index:40;background:#f2f2f7}
 .total-lbl{font-size:12px;color:#8e8e93}
 .total-val{font-size:44px;font-weight:600;color:#FB5C32;line-height:1.1;letter-spacing:-1px}
 .total-sub{font-size:12px;color:#8e8e93;margin-top:2px}
@@ -113,6 +129,7 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
   <button class="tab-btn" onclick="showTab('comparar',this)"><i class="ti ti-scale"></i>Comparar</button>
   <button class="tab-btn" onclick="showTab('folhetos',this)"><i class="ti ti-file-description"></i>Folhetos</button>
   <button class="tab-btn" onclick="showTab('lista',this)"><i class="ti ti-clipboard-list"></i>Lista</button>
+  <button class="tab-btn" onclick="showTab('produtos',this)"><i class="ti ti-box"></i>Produtos</button>
   <button class="tab-btn" onclick="showTab('cupom',this)"><i class="ti ti-camera"></i>Cupom</button>
   <button class="tab-btn" onclick="showTab('cardapio',this)"><i class="ti ti-calendar-week"></i>Cardápio</button>
   <button class="tab-btn" onclick="showTab('historico',this)"><i class="ti ti-receipt"></i>Histórico</button>
@@ -140,6 +157,10 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
     <div class="field">
       <label>Supermercado</label>
       <input id="c-mercado" placeholder="Nome do mercado" oninput="sessaoMercado=this.value">
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label>Local</label>
+      <select id="c-local"><option value="mercado">Mercado</option><option value="farmacia">Farmácia</option><option value="acougue">Açougue</option><option value="outro">Outro</option></select>
     </div>
   </div>
 
@@ -184,17 +205,28 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
   <div class="card" id="add-form">
     <div class="card-title">Adicionar item</div>
     <div class="g2">
-      <div class="field"><label>Nome *</label><input id="c-nome" placeholder="Nome do produto" autocomplete="off"></div>
+      <div class="field"><label>Nome *</label><input id="c-nome" placeholder="Nome do produto" autocomplete="off" list="dl-produtos"><datalist id="dl-produtos"></datalist></div>
       <div class="field"><label>Marca</label><input id="c-marca" placeholder="Ex: Italac"></div>
     </div>
-    <div class="g3">
+    <div class="btn-row" style="margin-bottom:10px">
+      <button class="btn btn-sm btn-p" id="modo-fixo" style="flex:1" onclick="setModoPeso(false)">Preço fixo</button>
+      <button class="btn btn-sm btn-s" id="modo-peso" style="flex:1" onclick="setModoPeso(true)">Por peso</button>
+    </div>
+    <div id="peso-box" style="display:none">
+      <div class="g2">
+        <div class="field"><label>Preço por kg R$</label><input id="c-preco-kg" data-cents="0" placeholder="0,00" inputmode="numeric" onkeydown="priceKey(event,this);setTimeout(pesoAoVivo,0)" style="caret-color:transparent;cursor:default"></div>
+        <div class="field"><label>Peso (g)</label><input id="c-peso" placeholder="634 ou 0,634 kg" inputmode="decimal" oninput="pesoAoVivo()"></div>
+      </div>
+      <div id="peso-total" style="font-size:14px;font-weight:600;color:#FB5C32;margin-bottom:10px"></div>
+    </div>
+    <div class="g3" id="fixo-box">
       <div class="field"><label>Tamanho</label><input id="c-tamanho" placeholder="500"></div>
       <div class="field"><label>Unidade</label>
         <select id="c-unidade"><option value="">—</option><option>g</option><option>kg</option><option>ml</option><option>L</option><option>un</option><option>pç</option><option>cx</option><option>pct</option></select>
       </div>
       <div class="field"><label>Preço R$</label><input id="c-preco" data-cents="0" placeholder="0,00" inputmode="numeric" onkeydown="priceKey(event,this)" style="caret-color:transparent;cursor:default"></div>
     </div>
-    <div class="field">
+    <div class="field" id="c-qtd-box">
       <label>Quantidade</label>
       <div class="qty-ctrl">
         <button onclick="chgQtd('c-qtd',-1)">−</button>
@@ -211,6 +243,10 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
         <i class="ti ti-plus"></i>Adicionar
       </button>
     </div>
+    <button class="btn btn-s btn-bl" style="margin-top:8px" onclick="buscarOpiniao()" id="opiniao-btn">
+      <i class="ti ti-world-search"></i>Buscar opiniões na web
+    </button>
+    <div id="opiniao-box" class="tip-box" style="display:none"></div>
     <!-- Botão de voz -->
     <button id="voz-btn" onclick="toggleVoz()" style="width:100%;margin-top:8px;padding:14px;border:none;border-radius:12px;background:#1c1c1e;color:#fff;font-size:15px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
       <i class="ti ti-microphone" id="voz-icon"></i>
@@ -281,19 +317,32 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 <div id="s-folhetos" class="screen">
   <p style="font-size:12px;color:#8e8e93;padding:8px 0 12px">Compare folhetos com sua lista permanente</p>
   <div class="card">
-    <div class="field"><label>Nome do mercado</label><input id="fol-mercado" placeholder="Ex: Atacadão"></div>
-    <button class="btn btn-p btn-bl" onclick="document.getElementById('fol-foto').click()" id="fol-btn">
-      <i class="ti ti-photo"></i>Adicionar folheto (foto)
+    <div class="field"><label>Nome do mercado</label><input id="fol-mercado" placeholder="Ex: Atacadão" oninput="TelaFolhetos.atualizarBotao()"></div>
+    <button class="btn btn-p btn-bl" onclick="document.getElementById('fol-foto').click()" id="fol-btn" disabled>
+      <i class="ti ti-photo"></i>Digite o nome do mercado primeiro
     </button>
-    <input id="fol-foto" type="file" accept="image/*" capture="environment" style="display:none" onchange="lerFolheto(this)">
+    <input id="fol-foto" type="file" multiple accept="image/*,application/pdf" style="display:none" onchange="TelaFolhetos.aoEscolherFotos(this)">
+    <input id="fol-pag" type="file" multiple accept="image/*,application/pdf" style="display:none" onchange="TelaFolhetos.aoEscolherPaginas(this)">
+    <button class="btn btn-s btn-bl" style="margin-top:8px" onclick="document.getElementById('fol-csv').click()" id="fol-csv-btn">
+      <i class="ti ti-file-spreadsheet"></i>Importar CSV
+    </button>
+    <input id="fol-csv" type="file" accept=".csv,text/csv" style="display:none" onchange="TelaFolhetos.aoEscolherCsv(this)">
+    <p id="fol-progresso" class="li-sub" style="margin-top:6px"></p>
+    <p id="fol-aviso" class="li-sub" style="white-space:normal;margin-top:4px"></p>
   </div>
   <div id="folhetos-list"></div>
   <div id="fol-cmp-wrap" style="display:none;margin-bottom:12px">
-    <button class="btn btn-p btn-bl" onclick="compararFolhetos()" id="fol-cmp-btn">
+    <button class="btn btn-p btn-bl" onclick="TelaFolhetos.comparar()" id="fol-cmp-btn">
       <i class="ti ti-chart-bar"></i>Comparar com minha lista
     </button>
   </div>
   <div id="fol-result"></div>
+</div>
+
+<!-- ══ PRODUTOS ═══════════════════════════════════════════════════════ -->
+<div id="s-produtos" class="screen">
+  <p style="font-size:12px;color:#8e8e93;padding:8px 0 12px">Quanto dura cada produto e quanto custa por dia</p>
+  <div id="produtos-lista"></div>
 </div>
 
 <!-- ══ LISTA ══════════════════════════════════════════════════════════ -->
@@ -314,16 +363,14 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
   <!-- HOJE -->
   <div id="st-hoje">
     <div class="card" style="margin-bottom:10px">
-      <div style="display:flex;gap:8px">
-        <input id="hoje-input" placeholder="O que preciso hoje..." style="flex:1" oninput="updateAC()" onkeydown="if(event.key==='Enter')addHoje()" autocomplete="off">
-        <button class="btn btn-p btn-sm" onclick="addHoje()"><i class="ti ti-plus"></i></button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="nr-texto" placeholder="O que preciso... (separe com vírgula)" style="flex:1" oninput="updateAC()" onkeydown="if(event.key==='Enter')TelaListaRapida.incluirDigitado()" autocomplete="off">
+        <button class="btn btn-p btn-sm" aria-label="Incluir na prévia" onclick="TelaListaRapida.incluirDigitado()"><i class="ti ti-plus"></i></button>
+        <button class="btn btn-s btn-sm" id="nr-voz-btn" aria-label="Falar" onclick="TelaListaRapida.alternarVoz()">🎤</button>
       </div>
       <div id="ac-box" class="ac-box"></div>
-      <div class="btn-row" style="margin-top:10px">
-        <button class="btn btn-s btn-sm" style="flex:1" onclick="loadHoje().then(()=>{renderHoje();renderQueue();})"><i class="ti ti-refresh"></i>Recarregar</button>
-        <button class="btn btn-s btn-sm" style="flex:1" onclick="limparFeitos()"><i class="ti ti-check"></i>Limpar comprados</button>
-        <button class="btn btn-s btn-sm" style="flex:1;color:#ff3b30" onclick="limparTodosHoje()"><i class="ti ti-trash"></i>Limpar tudo</button>
-      </div>
+      <div id="nr-aviso" style="font-size:13px;color:#8e8e93;margin-top:6px"></div>
+      <div id="nr-revisao" style="margin-top:6px"></div>
     </div>
     <div id="hoje-list"></div>
   </div>
@@ -364,9 +411,22 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 
 <!-- ══ CUPOM ══════════════════════════════════════════════════════════ -->
 <div id="s-cupom" class="screen">
-  <p style="font-size:12px;color:#8e8e93;padding:8px 0 12px">Fotografe o cupom para registrar a compra</p>
+  <div class="btn-row" style="margin:8px 0">
+    <button class="btn btn-sm btn-p" id="cup-m-cad" style="flex:1" onclick="setCupomModo('cadastrar')">Cadastrar compra do cupom</button>
+    <button class="btn btn-sm btn-s" id="cup-m-conf" style="flex:1" onclick="setCupomModo('conferir')">Conferir compra</button>
+  </div>
+  <p id="cup-ajuda" style="font-size:12px;color:#8e8e93;padding:0 0 12px">Comprou sem abrir o app? Fotografe o cupom para registrar os itens.</p>
   <div class="card">
-    <div class="field"><label>Supermercado</label><input id="cup-mercado" placeholder="Nome do mercado"></div>
+    <div id="cup-cad">
+      <div class="field"><label>Nome do lugar</label><input id="cup-mercado" placeholder="Ex.: Farmácia, mercado..."></div>
+      <div class="g2">
+        <div class="field"><label>Local</label><select id="cup-local"><option value="mercado">Mercado</option><option value="farmacia">Farmácia</option><option value="acougue">Açougue</option><option value="outro">Outro</option></select></div>
+        <div class="field"><label>Data da compra</label><input id="cup-data" type="date"></div>
+      </div>
+    </div>
+    <div id="cup-conf-base" style="display:none">
+      <div class="field"><label>Comparar o cupom com</label><select id="cup-base" onchange="cupomBaseMudou()"></select></div>
+    </div>
     <button class="btn btn-p btn-bl" onclick="document.getElementById('cup-foto').click()" id="cup-btn">
       <i class="ti ti-camera"></i>Fotografar cupom
     </button>
@@ -540,6 +600,19 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/db.js"></script>
+<script src="js/texto-seguro.js"></script>
+<script src="js/unidades.js"></script>
+<script src="js/ia.js"></script>
+<script src="js/folhetos.js"></script>
+<script src="js/tela-folhetos.js"></script>
+<script src="js/nomes.js"></script>
+<script src="js/produtos.js"></script>
+<script src="js/voz-lista.js"></script>
+<script src="js/dicionario.js"></script>
+<script src="js/gastos.js"></script>
+<script src="js/lotes.js"></script>
+<script src="js/tela-produtos.js"></script>
+<script src="js/tela-lista-rapida.js"></script>
 <script>
 // ── CONFIG / LOGIN / BANCO (módulos em js/) ───────────────────────────
 const auth = SoloAuth.createAuth({
@@ -551,6 +624,8 @@ const { dbGet, dbPost, dbPatch, dbDel, claudeFetch } = SoloDb.createDb({
   getToken: () => auth.getAccessToken(), fetchFn: (...a) => fetch(...a),
   onExpirada: () => mostrarLogin('Sua sessão expirou. Entre de novo (seu carrinho continua aberto).')
 });
+const ia = SoloIa.createIa({ claudeFetch });
+// TelaFolhetos é criada depois de claudeText/toB64/lista existirem (ver mais abaixo)
 
 // ── CLAUDE ───────────────────────────────────────────────────────────
 function extractJSON(text) {
@@ -571,27 +646,16 @@ function extractJSON(text) {
   return null;
 }
 
-async function claudeImg(prompt, b64, mime, model='claude-sonnet-4-6') {
+async function claudeImg(prompt, b64, mime, model=SoloIa.MODELO_BARATO) {
   try {
-    const r = await claudeFetch({
-        model, // sonnet para cupom (complexo), haiku para etiqueta (simples)
-        max_tokens:1500,
-        messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
-          {type:'text',text:prompt}
-        ]}]
-    });
-    if (!r.ok) { const e=await r.json(); throw new Error(e.error?.message||'Erro HTTP '+r.status); }
-    const d = await r.json();
-    if (d.error) throw new Error(d.error.message);
-    return d.content?.map(b=>b.text||'').join('')||'';
+    return (await ia.claudeArquivo({prompt, b64, mime, model, maxTokens:1500})).texto;
   } catch(e) { console.error('claudeImg erro:',e); if (e.message==='sessao-expirada') mostrarLogin('Sua sessão expirou. Entre de novo.'); throw e; }
 }
 
-async function claudeText(prompt, maxTk=400) {
+async function claudeText(prompt, maxTk=400, model='claude-sonnet-4-6') {
   try {
     const r = await claudeFetch({
-        model:'claude-sonnet-4-6',
+        model,
         max_tokens:maxTk,
         messages:[{role:'user',content:prompt}]
     });
@@ -603,6 +667,10 @@ async function claudeText(prompt, maxTk=400) {
 }
 
 async function toB64(file) {
+  if (file.type==='application/pdf') {
+    const u = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    return u.split(',')[1];
+  }
   // reduz a foto (lado maior 1568 px, JPEG) para caber no limite do servidor (~4 MB)
   const url = await new Promise((res,rej)=>{
     const r = new FileReader();
@@ -632,7 +700,8 @@ function fmtN(v) {
 }
 
 // ── ESTADO ───────────────────────────────────────────────────────────
-let cart=[], lista=[], hojeList=[], folhetos=[];
+let cart=[], lista=[], hojeList=[];
+let respostasCompra={}, naoCompradosIds=new Set(), listaPlanejada=[], modoPeso=false;
 let receitas=[], cardapioSemana=[], ingredientesTemp=[], editReceitaId=null, celulaSelecionada=null, semanaOffset=0;
 let editCartId=null, editFixoId=null;
 let pendingCS=null, pendingFixo=null;
@@ -641,8 +710,20 @@ let sessaoMercado='';
 
 // ── INIT ─────────────────────────────────────────────────────────────
 async function init() {
-  await Promise.all([loadLista(), loadHoje()]);
+  await Promise.all([loadLista(), loadHoje(), produtos.carregar(), TelaProdutos.carregar()]);
+  atualizarDatalist();
+  await criarSugeridos();
   renderQueue(); renderHoje(); renderFixos(); updateTotal();
+}
+
+// Produtos que devem acabar em breve entram na lista Hoje como "sugerido" (sem duplicar).
+async function criarSugeridos() {
+  const pendentes = new Set(hojeList.filter(i => !i.done && i.produto_id).map(i => i.produto_id));
+  for (const p of TelaProdutos.sugeridos(pendentes)) {
+    const linha = { nome: p.nome, detalhe: 'sugerido: deve acabar em breve', done: false, produto_id: p.id, origem: 'sugerida' };
+    const salvo = await dbPost('lista_hoje', linha);
+    if (salvo) hojeList.push(salvo);
+  }
 }
 
 async function loadLista() {
@@ -665,7 +746,9 @@ function showTab(id,el) {
   el.classList.add('active');
   if(id==='lista'){renderHoje();renderFixos();}
   if(id==='historico')renderHistorico();
-  if(id==='folhetos')renderFolhetos();
+  if(id==='folhetos')TelaFolhetos.abrir();
+  if(id==='produtos')TelaProdutos.render();
+  if(id==='cupom'&&!document.getElementById('cup-data').value)document.getElementById('cup-data').value=hojeLocal();
   if(id==='cardapio'){renderSemana();renderReceitas();}
 }
 function showSubtab(id,el) {
@@ -695,19 +778,59 @@ function updateTotal() {
   renderCartItems();
 }
 
+function setModoPeso(on) {
+  modoPeso = !!on;
+  document.getElementById('peso-box').style.display = on ? 'block' : 'none';
+  document.getElementById('fixo-box').style.display = on ? 'none' : '';
+  document.getElementById('c-qtd-box').style.display = on ? 'none' : '';
+  document.getElementById('modo-fixo').className = 'btn btn-sm ' + (on ? 'btn-s' : 'btn-p');
+  document.getElementById('modo-peso').className = 'btn btn-sm ' + (on ? 'btn-p' : 'btn-s');
+}
+function pesoAoVivo() {
+  const v = Gastos.valorPorPeso(getPriceVal('c-preco-kg'), Gastos.lerPesoG(document.getElementById('c-peso').value));
+  document.getElementById('peso-total').textContent = v === null ? '' : '= ' + fmtBRL(v);
+}
+function atualizarDatalist() {
+  const dl = document.getElementById('dl-produtos'); if (!dl) return;
+  dl.innerHTML = produtos.lista().map(p => '<option value="' + TextoSeguro.escapar(p.nome) + '">').join('');
+}
+
 function addItem(pre=null) {
   const nome=(pre?.nome||document.getElementById('c-nome').value).trim();
   if(!nome){alert('Informe o nome do produto.');return;}
   const marca = pre?.marca||document.getElementById('c-marca').value;
   const tamanho = pre?.tamanho||document.getElementById('c-tamanho').value;
   const unidade = pre?.unidade||document.getElementById('c-unidade').value;
-  const preco = parseBRL(pre?.preco||document.getElementById('c-preco').value);
-  const qtd = parseQtd(pre?.qtd||document.getElementById('c-qtd').value);
-  cart.push({id:++cartCtr,nome,marca,tamanho,unidade,preco,qtd,subtotal:Math.round(preco*qtd*100)/100});
-  if(!pre){['c-nome','c-marca','c-tamanho'].forEach(id=>document.getElementById(id).value='');clearPrice('c-preco');document.getElementById('c-qtd').value='1';document.getElementById('c-unidade').value='';}
+  let preco = parseBRL(pre?.preco||document.getElementById('c-preco').value);
+  let qtd = parseQtd(pre?.qtd||document.getElementById('c-qtd').value);
+  let extra = {}, subtotal = Math.round(preco*qtd*100)/100;
+  if(!pre && modoPeso){
+    const precoKg = getPriceVal('c-preco-kg'), pesoG = Gastos.lerPesoG(document.getElementById('c-peso').value);
+    const v = Gastos.valorPorPeso(precoKg, pesoG);
+    if(v===null){alert('Confira o preço por kg e o peso (maiores que zero).');return;}
+    preco = precoKg; qtd = 1; subtotal = v; extra = {precoKg, pesoG};
+  }
+  cart.push({id:++cartCtr,nome,marca,tamanho,unidade,preco,qtd,subtotal,...extra});
+  if(!pre){['c-nome','c-marca','c-tamanho'].forEach(id=>document.getElementById(id).value='');clearPrice('c-preco');clearPrice('c-preco-kg');document.getElementById('c-peso').value='';document.getElementById('peso-total').textContent='';document.getElementById('c-qtd').value='1';document.getElementById('c-unidade').value='';}
   document.getElementById('tip-box').style.display='none';
+  const novoId = cartCtr;
   updateTotal();
   trackFrequencia(nome);
+  const pr = prepararCompra().find(x => x.cartId === novoId);
+  if (pr && pr.classe === null) abrirModalEssencial(novoId); // não estava na lista: pergunta já, na hora de adicionar
+}
+
+let meId = null;
+function abrirModalEssencial(id) {
+  const it = cart.find(c => c.id === id); if (!it) return;
+  meId = id;
+  document.getElementById('me-titulo').textContent = it.nome;
+  document.getElementById('modal-essencial').style.display = 'block';
+}
+function responderModalEssencial(v) {
+  if (meId !== null) responderEssencialCarrinho(meId, v);
+  meId = null;
+  document.getElementById('modal-essencial').style.display = 'none';
 }
 
 function addFromQueue(hojeId) {
@@ -719,11 +842,13 @@ function addFromQueue(hojeId) {
   document.getElementById('c-unidade').value=lp.unidade||'';
   document.getElementById('c-preco').value='';
   document.getElementById('c-qtd').value='1';
+  listaPlanejada.push({nome:h.nome,produto_id:h.produto_id||null});
   dbPatch('lista_hoje',hojeId,{done:true});
   hojeList=hojeList.filter(i=>i.id!==hojeId);
   renderQueue();
+  // foco já no clique (no iPhone o teclado de números só abre assim): nome já veio, falta o preço
+  document.getElementById('c-preco').focus({preventScroll:true});
   document.getElementById('add-form').scrollIntoView({behavior:'smooth',block:'start'});
-  setTimeout(()=>document.getElementById('c-preco').focus(),300);
 }
 
 async function trackFrequencia(nome) {
@@ -760,6 +885,7 @@ function recusarCS(){document.getElementById('cs-notify').style.display='none';p
 
 function editCartItem(id) {
   const item=cart.find(i=>i.id===id); if(!item)return;
+  if(item.precoKg){alert('Item por peso: remova e adicione de novo.');return;}
   editCartId=id;
   document.getElementById('e-nome').value=item.nome;
   document.getElementById('e-marca').value=item.marca||'';
@@ -782,14 +908,27 @@ function salvarEdit() {
   cancelEdit(); updateTotal();
 }
 function cancelEdit(){editCartId=null;document.getElementById('edit-form').style.display='none';}
-function removeCartItem(id){cart=cart.filter(i=>i.id!==id);updateTotal();}
+function removeCartItem(id){cart=cart.filter(i=>i.id!==id);delete respostasCompra[id];updateTotal();}
 
+const ETIQ_CLASSE = {
+  planejado: '<span class="tag">Planejado</span>',
+  esquecido_essencial: '<span class="tag tag-o">Esquecido essencial</span>',
+  impulso: '<span class="tag" style="background:#ffe5e5;color:#c0392b">Impulso</span>'
+};
+function responderEssencialCarrinho(id, v) {
+  if (typeof v !== 'boolean') { renderCartItems(); return; } // fechou o pop-up sem escolher: os botões do item continuam lá
+  respostasCompra[id] = { ...(respostasCompra[id] || {}), essencial: v };
+  renderCartItems();
+}
 function renderCartItems() {
+  const prep = cart.length ? prepararCompra() : [];
+  const classeDe = id => (prep.find(x => x.cartId === id) || {}).classe;
   document.getElementById('cart-items').innerHTML=cart.map(item=>`
     <div class="li">
       <div class="li-info">
-        <div class="li-name">${item.nome}${item.marca?' <span class="tag">'+item.marca+'</span>':''}</div>
-        <div class="li-sub">${[item.tamanho+(item.unidade||''),fmtBRL(item.preco)+' × '+fmtN(item.qtd)].filter(Boolean).join(' · ')}</div>
+        <div class="li-name">${TextoSeguro.escapar(item.nome)}${item.marca?' <span class="tag">'+TextoSeguro.escapar(item.marca)+'</span>':''} ${ETIQ_CLASSE[classeDe(item.id)]||''}</div>
+        <div class="li-sub">${item.precoKg?fmtN(item.pesoG)+' g × '+fmtBRL(item.precoKg)+'/kg':[item.tamanho+(item.unidade||''),fmtBRL(item.preco)+' × '+fmtN(item.qtd)].filter(Boolean).join(' · ')}</div>
+        ${classeDe(item.id)===null?`<div style="margin-top:4px;font-size:12px">Não estava na lista. <button onclick="responderEssencialCarrinho(${item.id},true)">Essencial</button> <button onclick="responderEssencialCarrinho(${item.id},false)">Supérfluo</button></div>`:''}
       </div>
       <div class="li-price">${fmtBRL(item.subtotal)}</div>
       <button class="ico-btn" onclick="editCartItem(${item.id})"><i class="ti ti-pencil"></i></button>
@@ -805,12 +944,11 @@ function renderQueue() {
   document.getElementById('queue-count').textContent=pend.length+' pendente'+(pend.length!==1?'s':'');
   document.getElementById('queue-items').innerHTML=pend.map(h=>`
     <div class="queue-item" onclick="addFromQueue('${h.id}')">
-      <i class="ti ti-arrow-right" style="color:#FB5C32;flex-shrink:0"></i>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.nome}</div>
-        ${h.detalhe?`<div class="li-sub">${h.detalhe}</div>`:''}
+        <div style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${TextoSeguro.escapar(h.nome)}</div>
+        ${h.detalhe?`<div class="li-sub">${TextoSeguro.escapar(h.detalhe)}</div>`:''}
       </div>
-      <span class="tag tag-o" style="flex-shrink:0">Preencher →</span>
+      <i class="ti ti-chevron-right" style="color:#FB5C32;flex-shrink:0"></i>
     </div>`).join('');
 }
 
@@ -829,7 +967,7 @@ Responda APENAS com JSON válido, sem texto extra:
   "unidade": "unidade de venda: g, kg, ml, L, un, pç, cx, pct ou null",
   "preco": 0.00
 }`;
-    const resp=await ai(prompt, b64, file.type, 'claude-haiku-4-5-20251001', 300);
+    const resp=(await ia.claudeArquivo({prompt, b64, mime:file.type, model:SoloIa.MODELO_BARATO, maxTokens:300})).texto;
     const p=extractJSON(resp);
     if(p && p.nome) {
       document.getElementById('c-nome').value = p.nome;
@@ -861,28 +999,78 @@ async function getDica() {
   btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>';
   const t=cart.reduce((s,i)=>s+i.subtotal,0);
   const resumo=cart.map(i=>`${i.nome}: ${fmtBRL(i.subtotal)}`).join(', ');
-  const resp=await claudeText(`Estou no supermercado. Itens: ${resumo}. Total: ${fmtBRL(t)}. UMA dica prática para economizar. Máximo 2 frases em português.`,150);
+  const resp=await claudeText(`Estou no supermercado. Itens: ${resumo}. Total: ${fmtBRL(t)}. UMA dica prática para economizar. Máximo 2 frases em português. Responda em texto simples, sem markdown.`,150,SoloIa.MODELO_BARATO);
   const tb=document.getElementById('tip-box');
-  tb.innerHTML='💡 '+(resp||'Dica indisponível no momento.');
+  tb.innerHTML='💡 '+(resp?TextoSeguro.mdSimples(resp):'Dica indisponível no momento.');
   tb.style.display='block';
   btn.disabled=false; btn.innerHTML='<i class="ti ti-bulb"></i>Dica';
 }
 
 function finalizarCompra() {
   if (!cart.length) return;
-  // Abre modal de confirmação
-  const total = cart.reduce((s, i) => s + i.subtotal, 0);
-  document.getElementById('modal-total').textContent = fmtBRL(total);
-  document.getElementById('modal-itens').innerHTML = cart.map(item => `
+  naoCompradosIds = new Set();
+  renderModalCompra();
+  document.getElementById('modal-confirmacao').style.display = 'block';
+}
+
+function prepararCompra() {
+  return Gastos.prepararItensCompra(cart, produtos.lista(), hojeList.concat(listaPlanejada), respostasCompra);
+}
+function marcarNaoComprado(id, on) {
+  if (on) naoCompradosIds.add(id); else naoCompradosIds.delete(id);
+  const ex = document.getElementById('ex-' + id); if (ex) ex.style.display = on ? 'none' : '';
+  atualizarResumoModal(); // só o resumo muda; a caixinha marcada não é redesenhada
+}
+function responderEssencial(id, v) { respostasCompra[id] = { ...(respostasCompra[id] || {}), essencial: v }; renderModalCompra(); }
+function responderMesmoQue(id, produtoId) {
+  respostasCompra[id] = { ...(respostasCompra[id] || {}), ...(produtoId ? { mesmoQue: produtoId } : { mesmoQueNao: true }) };
+  renderModalCompra();
+}
+
+function atualizarResumoModal() {
+  const prep = prepararCompra();
+  const comprados = prep.filter(p => !naoCompradosIds.has(p.cartId));
+  const sub = id => (cart.find(c => c.id === id) || {}).subtotal || 0;
+  const r = Gastos.resumoCompra(comprados.map(p => ({ classe: p.classe, subtotal: sub(p.cartId) })));
+  document.getElementById('modal-total').textContent = fmtBRL(r.total);
+  document.getElementById('modal-resumo').innerHTML =
+    `Planejado ${fmtBRL(r.planejado)} · Esquecido essencial ${fmtBRL(r.esquecido_essencial)} · Impulso ${fmtBRL(r.impulso)}`;
+  const faltam = comprados.filter(p => p.classe === null).length;
+  const btn = document.getElementById('modal-salvar');
+  btn.disabled = faltam > 0;
+  btn.style.opacity = faltam > 0 ? '.5' : '1';
+}
+
+function renderModalCompra() {
+  const E = TextoSeguro.escapar;
+  const prep = prepararCompra();
+  atualizarResumoModal();
+  document.getElementById('modal-itens').innerHTML = prep.map(p => {
+    const item = cart.find(c => c.id === p.cartId);
+    const resp = respostasCompra[p.cartId] || {};
+    let extra = '';
+    {
+      if (!p.produtoId && !resp.mesmoQue && !resp.mesmoQueNao) {
+        const s = Nomes.sugerirProdutos(item.nome, produtos.lista(), 1)[0];
+        if (s && s.motivo === 'parecido') {
+          extra += `<div style="font-size:12px;margin-top:4px">Novo nome. É o mesmo que <strong>${E(s.produto.nome)}</strong>? ` +
+            `<button onclick="responderMesmoQue(${p.cartId},'${E(s.produto.id)}')">Sim</button> <button onclick="responderMesmoQue(${p.cartId},null)">Não</button></div>`;
+        }
+      }
+      if (p.classe === null) {
+        extra += `<div style="margin-top:4px"><button onclick="responderEssencial(${p.cartId},true)">Essencial</button> <button onclick="responderEssencial(${p.cartId},false)">Supérfluo</button></div>`;
+      }
+    }
+    return `
     <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f2f2f7">
-      <input type="checkbox" id="nc-${item.id}" value="${item.id}"
+      <input type="checkbox" id="nc-${item.id}" value="${item.id}" ${naoCompradosIds.has(item.id) ? 'checked' : ''} onchange="marcarNaoComprado(${item.id},this.checked)"
         style="width:20px;height:20px;accent-color:#FF3B30;cursor:pointer;flex-shrink:0">
       <label for="nc-${item.id}" style="flex:1;cursor:pointer">
-        <div style="font-size:14px;font-weight:500">${item.nome}${item.marca ? ' · <span style="font-weight:400;color:#8e8e93">'+item.marca+'</span>' : ''}</div>
-        <div style="font-size:12px;color:#8e8e93">${fmtBRL(item.preco)} × ${fmtN(item.qtd)} = ${fmtBRL(item.subtotal)}</div>
+        <div style="font-size:14px;font-weight:500">${E(item.nome)}${item.marca ? ' · <span style="font-weight:400;color:#8e8e93">'+E(item.marca)+'</span>' : ''}</div>
+        <div style="font-size:12px;color:#8e8e93">${item.precoKg ? fmtN(item.pesoG)+' g × '+fmtBRL(item.precoKg)+'/kg' : fmtBRL(item.preco)+' × '+fmtN(item.qtd)} = ${fmtBRL(item.subtotal)}</div>
       </label>
-    </div>`).join('');
-  document.getElementById('modal-confirmacao').style.display = 'block';
+      </div>${extra ? '<div id="ex-'+item.id+'" style="padding:0 0 8px 32px;border-bottom:1px solid #f2f2f7;display:'+(naoCompradosIds.has(item.id)?'none':'block')+'">'+extra+'</div>' : ''}`;
+  }).join('');
 }
 
 function fecharModal() {
@@ -891,8 +1079,10 @@ function fecharModal() {
 
 async function confirmarCompra() {
   // Itens marcados = NÃO comprados
-  const naoComprados = cart.filter(i => document.getElementById('nc-' + i.id)?.checked);
-  const comprados = cart.filter(i => !document.getElementById('nc-' + i.id)?.checked);
+  const prep = prepararCompra();
+  if (prep.some(p => !naoCompradosIds.has(p.cartId) && p.classe === null)) return;
+  const naoComprados = cart.filter(i => naoCompradosIds.has(i.id));
+  const comprados = cart.filter(i => !naoCompradosIds.has(i.id));
 
   fecharModal();
 
@@ -906,23 +1096,44 @@ async function confirmarCompra() {
 
   const total = comprados.reduce((s, i) => s + i.subtotal, 0);
   const mercado = document.getElementById('c-mercado').value || 'Supermercado';
-  const sessao = await dbPost('sessoes_compra', { mercado, data: new Date().toISOString().split('T')[0], total });
+  const local = document.getElementById('c-local').value || 'mercado';
+  const dataCompra = new Date().toISOString().split('T')[0];
+  const sessao = await dbPost('sessoes_compra', { mercado, data: dataCompra, total, local_tipo: local });
 
   if (sessao) {
+    const paraLotes = [];
     for (const item of comprados) {
-      await dbPost('itens_compra', { sessao_id: sessao.id, nome: item.nome, marca: item.marca || '', tamanho: item.tamanho || '', unidade: item.unidade || '', preco: item.preco, qtd: item.qtd, subtotal: item.subtotal });
+      const p = prep.find(x => x.cartId === item.id);
+      const resp = respostasCompra[item.id] || {};
+      let prod = p.produtoId ? produtos.lista().find(x => x.id === p.produtoId) : await produtos.garantir(item.nome);
+      if (prod && Nomes.normalizar(item.nome) !== prod.chave) await produtos.adicionarApelido(prod.id, item.nome);
+      if (prod && typeof resp.essencial === 'boolean' && prod.essencial !== resp.essencial) await produtos.marcar(prod.id, { essencial: resp.essencial });
+      await dbPost('itens_compra', { sessao_id: sessao.id, nome: item.nome, marca: item.marca || '', tamanho: item.tamanho || '', unidade: item.unidade || '', preco: item.preco, qtd: item.qtd, subtotal: item.subtotal,
+        produto_id: prod ? prod.id : null, classe: p.classe, preco_kg: item.precoKg || null, peso_g: item.pesoG || null });
+      if (prod) paraLotes.push({ produtoId: prod.id, preco: item.subtotal, qtd: item.qtd });
     }
+    await TelaProdutos.registrarLotes(paraLotes, dataCompra, local);
+
+    // o que foi comprado sai da lista Hoje sozinho
+    const compradosIds = new Set(paraLotes.map(x => x.produtoId));
+    const compradosNomes = new Set(comprados.map(i => Nomes.canonico(i.nome)));
+    const saem = hojeList.filter(h => !h.done && ((h.produto_id && compradosIds.has(h.produto_id)) || compradosNomes.has(Nomes.canonico(h.nome))));
+    for (const h of saem) { if (!String(h.id).startsWith('tmp-')) await dbDel('lista_hoje', h.id); }
+    hojeList = hojeList.filter(h => !saem.includes(h));
 
     // Itens não comprados voltam para lista de hoje
     for (const item of naoComprados) {
-      const tmpId = 'tmp-' + Date.now() + Math.random();
-      hojeList.push({ id: tmpId, nome: item.nome, detalhe: [item.marca, (item.tamanho || '') + (item.unidade || '')].filter(Boolean).join(' · '), done: false });
-      dbPost('lista_hoje', { nome: item.nome, detalhe: [item.marca, (item.tamanho || '') + (item.unidade || '')].filter(Boolean).join(' · '), done: false });
+      const prod = await produtos.garantir(item.nome);
+      const detalhe = [item.marca, (item.tamanho || '') + (item.unidade || '')].filter(Boolean).join(' · ');
+      const linha = { nome: item.nome, detalhe, done: false, produto_id: prod ? prod.id : null, origem: 'anotada' };
+      const salvo = await dbPost('lista_hoje', linha);
+      hojeList.push(salvo || { id: 'tmp-' + Date.now() + Math.random(), ...linha });
     }
 
-    cart = [];
+    cart = []; listaPlanejada = []; respostasCompra = {}; naoCompradosIds = new Set();
     document.getElementById('c-mercado').value = '';
     document.getElementById('tip-box').style.display = 'none';
+    atualizarDatalist();
     updateTotal();
     renderHoje(); renderQueue();
 
@@ -939,7 +1150,7 @@ async function confirmarCompra() {
 
 function limparCart(){
   if(!cart.length)return;
-  if(confirm('Limpar todo o carrinho?')){cart=[];document.getElementById('tip-box').style.display='none';updateTotal();}
+  if(confirm('Limpar todo o carrinho?')){cart=[];listaPlanejada=[];respostasCompra={};document.getElementById('tip-box').style.display='none';updateTotal();}
 }
 
 // ── COMPARAR ─────────────────────────────────────────────────────────
@@ -949,65 +1160,104 @@ async function comparar() {
   const aun=document.getElementById('a-un').value,bun=document.getElementById('b-un').value;
   const an=document.getElementById('a-nome').value||'Produto A',bn=document.getElementById('b-nome').value||'Produto B';
   if(!pa||!qa||!pb||!qb){alert('Preencha preço e quantidade dos dois produtos.');return;}
-  const ppuA=pa/qa,ppuB=pb/qb,winner=ppuA<=ppuB?'A':'B';
-  const pct=(Math.abs(ppuA-ppuB)/Math.max(ppuA,ppuB)*100).toFixed(1);
+  const ba=Unidades.precoPorBase(pa,qa,aun),bb=Unidades.precoPorBase(pb,qb,bun);
+  const ct=document.getElementById('comp-tip'); ct.style.display='none';
   document.getElementById('comp-result').style.display='block';
+  if(!ba||!bb||ba.base!==bb.base){
+    document.getElementById('comp-boxes').innerHTML='';
+    document.getElementById('comp-pct').textContent=`Unidades diferentes (${ba?ba.base:aun} x ${bb?bb.base:bun}): não dá para comparar.`;
+    return;
+  }
+  const ppuA=ba.valor,ppuB=bb.valor,winner=ppuA<=ppuB?'A':'B';
+  const pct=(Math.abs(ppuA-ppuB)/Math.max(ppuA,ppuB)*100).toFixed(1);
   const mkBox=(nome,ppu,un,win)=>`
     <div class="win-box" style="background:${win?'#fff7f5':'#f2f2f7'};border:${win?'2px solid #FB5C32':'1px solid #e5e5ea'}">
       ${win?'<div style="font-size:10px;color:#FB5C32;font-weight:600;margin-bottom:4px">✓ MELHOR PREÇO</div>':''}
-      <div style="font-size:12px;color:#8e8e93;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nome}</div>
+      <div style="font-size:12px;color:#8e8e93;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${TextoSeguro.escapar(nome)}</div>
       <div style="font-size:20px;font-weight:600;color:${win?'#FB5C32':'#1c1c1e'}">${fmtBRL(ppu)}</div>
       <div style="font-size:11px;color:#8e8e93">por ${un}</div>
     </div>`;
-  document.getElementById('comp-boxes').innerHTML=mkBox(an,ppuA,aun,winner==='A')+mkBox(bn,ppuB,bun,winner==='B');
-  document.getElementById('comp-pct').innerHTML=`diferença de <strong style="color:#2ea86b">${pct}%</strong> por unidade`;
-  const ct=document.getElementById('comp-tip'); ct.style.display='none';
-  const resp=await claudeText(`Produto A: ${an} ${fmtBRL(pa)}/${fmtN(qa)}${aun}. Produto B: ${bn} ${fmtBRL(pb)}/${fmtN(qb)}${bun}. ${winner==='A'?an:bn} é ${pct}% mais barato/unidade. Recomende em 2 frases em português.`,150);
-  if(resp){ct.innerHTML='💡 '+resp;ct.style.display='block';}
+  document.getElementById('comp-boxes').innerHTML=mkBox(an,ppuA,ba.base,winner==='A')+mkBox(bn,ppuB,bb.base,winner==='B');
+  document.getElementById('comp-pct').innerHTML=`diferença de <strong style="color:#2ea86b">${pct}%</strong> por ${ba.base}`;
+  const resp=await claudeText(`Produto A: ${an} ${fmtBRL(pa)}/${fmtN(qa)}${aun}. Produto B: ${bn} ${fmtBRL(pb)}/${fmtN(qb)}${bun}. ${winner==='A'?an:bn} é ${pct}% mais barato por ${ba.base}. Recomende em 2 frases em português. Responda em texto simples, sem markdown.`,150,SoloIa.MODELO_BARATO);
+  if(resp){ct.innerHTML='💡 '+TextoSeguro.mdSimples(resp);ct.style.display='block';}
 }
 
 // ── FOLHETOS ─────────────────────────────────────────────────────────
-function renderFolhetos() {
-  const el=document.getElementById('folhetos-list');
-  el.innerHTML=folhetos.length?folhetos.map(f=>`
-    <div class="card" style="margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><div style="font-weight:500">${f.mercado}</div><div class="li-sub">${f.itens.length} itens no folheto</div></div>
-        <button class="ico-btn" onclick="rmFolheto('${f.id}')"><i class="ti ti-x"></i></button>
-      </div>
-    </div>`).join(''):'<div class="empty"><i class="ti ti-file-x"></i><p>Nenhum folheto adicionado</p></div>';
-  document.getElementById('fol-cmp-wrap').style.display=folhetos.length>0&&lista.length>0?'block':'none';
-}
-async function lerFolheto(input) {
-  const file=input.files[0]; if(!file)return;
-  const mercado=document.getElementById('fol-mercado').value.trim();
-  if(!mercado){alert('Informe o nome do mercado primeiro.');input.value='';return;}
-  const btn=document.getElementById('fol-btn');
-  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>Lendo...';
-  try {
-    const b64=await toB64(file);
-    const resp=await claudeImg('Folheto promocional. Extraia produtos e preços. SOMENTE JSON válido: {"itens":[{"nome":"...","preco":0.00}]}',b64,file.type,'claude-sonnet-4-6');
-    const p=extractJSON(resp);
-    if(p&&p.itens&&p.itens.length){folhetos.push({id:Date.now().toString(),mercado,itens:p.itens});document.getElementById('fol-mercado').value='';renderFolhetos();}
-    else{alert('Não consegui ler o folheto. Tente foto mais clara.');}
-  } catch(e) { alert('Erro: '+e.message); }
-  btn.disabled=false; btn.innerHTML='<i class="ti ti-photo"></i>Adicionar folheto (foto)';
-  input.value='';
-}
-function rmFolheto(id){folhetos=folhetos.filter(f=>f.id!==id);renderFolhetos();}
-async function compararFolhetos() {
-  const btn=document.getElementById('fol-cmp-btn');
-  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i>Comparando...';
-  const lt=lista.map(i=>[i.nome,i.marca,(i.tamanho||'')+(i.unidade||'')].filter(Boolean).join(' ')).join('\n');
-  const ft=folhetos.map(f=>`=== ${f.mercado} ===\n${f.itens.map(i=>`${i.nome}: ${fmtBRL(i.preco)}`).join('\n')}`).join('\n\n');
-  const resp=await claudeText(`Minha lista:\n${lt}\n\n${ft}\n\nPara cada item da lista mostre o preço em cada mercado. Calcule total por mercado. Indique qual mercado ir e quanto economizaria. Use formato claro em português.`,600);
-  document.getElementById('fol-result').innerHTML=`<div class="card" style="font-size:13px;line-height:1.7;white-space:pre-wrap">${resp||'Sem resultado.'}</div>`;
-  btn.disabled=false; btn.innerHTML='<i class="ti ti-chart-bar"></i>Comparar com minha lista';
-}
+// Tela em js/tela-folhetos.js (criada aqui porque precisa de db, ia, toB64, claudeText e lista)
+const TelaFolhetos = createTelaFolhetos({
+  db: { dbGet, dbPost, dbPatch, dbDel }, ia, toB64, doc: document,
+  avisar: m => { const e = document.getElementById('fol-aviso'); if (e) e.textContent = m; },
+  getLista: () => lista, confirmar: m => confirm(m), claudeTexto: claudeText
+});
+
+// ── NOTA RÁPIDA / PRODUTOS ───────────────────────────────────────────
+const produtos = SoloProdutos.createProdutos({ db: { dbGet, dbPost, dbPatch, dbDel } });
+const vozNota = (() => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const LIMITE_MS = 5 * 60 * 1000; // ouve até 5 minutos seguidos
+  let rec = null, querOuvir = false, sessao = 0;
+  const soltar = r => { if (!r) return; r.onresult = null; r.onend = null; r.onerror = null; try { r.abort(); } catch (err) {} };
+  return {
+    suportado: !!SR,
+    // continua ouvindo (reabre sozinho quando o navegador corta por silêncio) até parar() ou o limite
+    iniciar(aoFinal, aoFim, op = {}) {
+      const continuo = op.continuo !== false;
+      const minha = ++sessao;           // eventos de sessões antigas não mexem nesta
+      soltar(rec); rec = null;
+      const inicio = Date.now();
+      let rapidos = 0;
+      querOuvir = true;
+      const desistir = msg => { querOuvir = false; if (op.aoErro) op.aoErro(msg); aoFim(); };
+      const abrir = () => {
+        const t0 = Date.now();
+        const r = new SR(); rec = r;
+        r.lang = 'pt-BR'; r.continuous = continuo; r.interimResults = !!op.aoParcial;
+        r.onresult = e => {
+          let parcial = '';
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const x = e.results[i];
+            if (x.isFinal) aoFinal(x[0].transcript); else parcial += x[0].transcript;
+          }
+          if (op.aoParcial) op.aoParcial(parcial);
+        };
+        r.onerror = e => {
+          if (minha !== sessao) return;
+          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') desistir('Permita o microfone para este site (Ajustes do Safari) e tente de novo.');
+          else if (e.error && e.error !== 'no-speech' && e.error !== 'aborted' && op.aoErro) op.aoErro('Microfone: ' + e.error);
+        };
+        r.onend = () => {
+          if (minha !== sessao) return;
+          if (querOuvir && continuo && Date.now() - inicio < LIMITE_MS) {
+            rapidos = (Date.now() - t0 < 1500) ? rapidos + 1 : 0;
+            if (rapidos >= 4) { desistir('O microfone parou de abrir. Toque em Falar de novo.'); return; }
+            setTimeout(() => {
+              if (!querOuvir || minha !== sessao) return;
+              try { abrir(); } catch (err) { desistir('O microfone parou. Toque em Falar de novo.'); }
+            }, 300);
+          } else { querOuvir = false; aoFim(); }
+        };
+        r.start();
+      };
+      setTimeout(() => { if (minha !== sessao) return; try { abrir(); } catch (err) { desistir('Não consegui abrir o microfone. Toque em Falar de novo.'); } }, 200);
+    },
+    parar() { querOuvir = false; if (rec) { try { rec.stop(); } catch (err) {} } }
+  };
+})();
+const hojeLocal = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const TelaProdutos = createTelaProdutos({
+  db: { dbGet, dbPost, dbPatch, dbDel }, produtos, doc: document, hoje: hojeLocal,
+  avisar: m => alert(m), storage: localStorage
+});
+const TelaListaRapida = createTelaListaRapida({
+  db: { dbGet, dbPost, dbPatch, dbDel }, produtos, doc: document, voz: vozNota,
+  getHoje: () => hojeList, perguntar: (m, v) => prompt(m, v),
+  aoAdicionar: criados => { hojeList.push(...criados); renderHoje(); renderQueue(); }
+});
 
 // ── LISTA — HOJE ─────────────────────────────────────────────────────
 function updateAC() {
-  const q=document.getElementById('hoje-input').value.trim();
+  const q=document.getElementById('nr-texto').value.trim();
   const ac=document.getElementById('ac-box');
   if(q.length<2){ac.style.display='none';ac.innerHTML='';return;}
   const m=lista.filter(i=>i.nome.toLowerCase().includes(q.toLowerCase())).slice(0,5);
@@ -1024,26 +1274,11 @@ async function selecionarAC(listaId) {
   const detalhe=[item.marca,(item.tamanho||'')+(item.unidade||''),item.obs].filter(Boolean).join(' · ');
   const tmpId='tmp-'+Date.now();
   hojeList.push({id:tmpId,nome:item.nome,detalhe,lista_permanente:item,done:false});
-  document.getElementById('hoje-input').value='';
+  document.getElementById('nr-texto').value='';
   document.getElementById('ac-box').style.display='none';
   renderHoje(); renderQueue();
   const novo=await dbPost('lista_hoje',{nome:item.nome,detalhe,lista_id:listaId,done:false});
   if(novo){const idx=hojeList.findIndex(i=>i.id===tmpId);if(idx!==-1)hojeList[idx]={...novo,lista_permanente:item};}
-}
-async function addHoje() {
-  const nome=document.getElementById('hoje-input').value.trim(); if(!nome)return;
-  document.getElementById('ac-box').style.display='none';
-  const jf=lista.find(i=>i.nome.toLowerCase()===nome.toLowerCase());
-  if(jf){await selecionarAC(jf.id);return;}
-  // Renderiza imediatamente (otimista)
-  const tmpId='tmp-'+Date.now();
-  hojeList.push({id:tmpId,nome,detalhe:'',done:false});
-  document.getElementById('hoje-input').value='';
-  renderHoje(); renderQueue();
-  // Sincroniza com Supabase em segundo plano
-  const novo=await dbPost('lista_hoje',{nome,detalhe:'',done:false});
-  if(novo){const idx=hojeList.findIndex(i=>i.id===tmpId);if(idx!==-1)hojeList[idx]=novo;}
-  trackFreqHoje(nome);
 }
 async function trackFreqHoje(nome) {
   const k=nome.toLowerCase().trim();
@@ -1069,6 +1304,8 @@ async function toggleHoje(id) {
   if(!String(id).startsWith('tmp-'))await dbPatch('lista_hoje',id,{done:item.done});
 }
 async function rmHoje(id) {
+  const rm=hojeList.find(i=>i.id===id);
+  if(rm&&rm.origem==='sugerida'&&rm.produto_id)TelaProdutos.dispensarSugerido(rm.produto_id);
   hojeList=hojeList.filter(i=>i.id!==id);
   renderHoje(); renderQueue();
   if(!String(id).startsWith('tmp-'))await dbDel('lista_hoje',id);
@@ -1080,11 +1317,44 @@ async function limparFeitos() {
   for(const x of feitos)if(!String(x.id).startsWith('tmp-'))await dbDel('lista_hoje',x.id);
 }
 async function limparTodosHoje() {
-  if(!confirm('Limpar toda a lista de hoje?'))return;
+  if(!confirm('Limpar toda a lista?'))return;
   for(const h of hojeList)await dbDel('lista_hoje',h.id);
   hojeList=[];
   renderHoje(); renderQueue();
 }
+async function produtoDaLinha(itemId) {
+  const it = hojeList.find(i => String(i.id) === String(itemId)); if (!it) return null;
+  let p = it.produto_id ? produtos.lista().find(x => x.id === it.produto_id) : produtos.achar(it.nome);
+  if (!p) p = await produtos.garantir(it.nome);
+  if (p && it.produto_id !== p.id) {
+    it.produto_id = p.id;
+    if (!String(it.id).startsWith('tmp-')) dbPatch('lista_hoje', it.id, { produto_id: p.id });
+  }
+  return p;
+}
+async function marcarLinha(itemId, campo, v) {
+  const p = await produtoDaLinha(itemId); if (!p) return;
+  await TelaProdutos.marcar(p.id, campo === 'essencial' ? { essencial: v === '' ? null : v === 'true' } : { urgencia: v });
+  atualizarDatalist(); renderHoje();
+}
+async function acabouLinha(itemId) {
+  const p = await produtoDaLinha(itemId);
+  if (p) await TelaProdutos.acabou(p.id);
+  renderHoje();
+}
+function controlesLinha(item) {
+  const p = item.produto_id ? produtos.lista().find(x => x.id === item.produto_id) : produtos.achar(item.nome);
+  const ess = p ? (p.essencial === true ? 'true' : p.essencial === false ? 'false' : '') : '';
+  const urg = p ? p.urgencia : 'sem_pressa';
+  const op = (v, t, a) => `<option value="${v}"${a === v ? ' selected' : ''}>${t}</option>`;
+  const id = TextoSeguro.escapar(String(item.id));
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+    <select onchange="marcarLinha('${id}','essencial',this.value)">${op('', 'Essencial?', ess)}${op('true', 'Essencial', ess)}${op('false', 'Supérfluo', ess)}</select>
+    <select onchange="marcarLinha('${id}','urgencia',this.value)">${op('sem_pressa', 'Sem pressa', urg)}${op('semana', 'Até uma semana', urg)}${op('amanha', 'Até amanhã', urg)}</select>
+    ${p && TelaProdutos.temAberto(p.id) ? `<button onclick="acabouLinha('${id}')">Acabou</button>` : ''}
+  </div>`;
+}
+
 function renderHoje() {
   const cont=document.getElementById('hoje-list'); if(!cont)return;
   if(!hojeList.length){cont.innerHTML='<div class="empty"><i class="ti ti-checklist"></i><p>Lista de hoje vazia</p></div>';return;}
@@ -1093,11 +1363,12 @@ function renderHoje() {
     <div class="check-li" style="opacity:${item.done?.6:1}">
       <div class="chkbox ${item.done?'done':''}" onclick="toggleHoje('${item.id}')">${item.done?'✓':''}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:500;text-decoration:${item.done?'line-through':'none'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.nome}</div>
-        ${item.detalhe?`<div class="li-sub">${item.detalhe}</div>`:''}
+        <div style="font-size:14px;font-weight:500;text-decoration:${item.done?'line-through':'none'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${TextoSeguro.escapar(item.nome)}${item.origem==='sugerida'?' <span class="tag tag-o">Sugerido</span>':''}</div>
+        ${item.detalhe?`<div class="li-sub">${TextoSeguro.escapar(item.detalhe)}</div>`:''}
+        ${item.done?'':controlesLinha(item)}
       </div>
       <button class="ico-btn" onclick="rmHoje('${item.id}')"><i class="ti ti-x"></i></button>
-    </div>`).join('')+'</div>';
+    </div>`).join('')+'<button class="btn btn-s btn-sm btn-bl" style="margin-top:10px;color:#ff3b30" onclick="limparTodosHoje()"><i class="ti ti-trash"></i>Limpar lista</button></div>';
 }
 async function confirmarFixo() {
   document.getElementById('lista-notify').style.display='none';
@@ -1175,6 +1446,32 @@ async function excluirFixo(id) {
 }
 
 // ── CUPOM ─────────────────────────────────────────────────────────────
+let cupomModo='cadastrar', respostasCupom={}, cupomCtr=0, cupomBaseItens=[], cupomComp=null;
+const LOCAIS_NOME={mercado:'Mercado',farmacia:'Farmácia',acougue:'Açougue',outro:'Outro'};
+const round2=n=>Math.round(n*100)/100;
+
+function setCupomModo(m) {
+  cupomModo=m;
+  document.getElementById('cup-m-cad').className='btn btn-sm '+(m==='cadastrar'?'btn-p':'btn-s');
+  document.getElementById('cup-m-conf').className='btn btn-sm '+(m==='conferir'?'btn-p':'btn-s');
+  document.getElementById('cup-cad').style.display=m==='cadastrar'?'block':'none';
+  document.getElementById('cup-conf-base').style.display=m==='conferir'?'block':'none';
+  document.getElementById('cup-ajuda').textContent=m==='cadastrar'
+    ?'Comprou sem abrir o app? Fotografe o cupom para registrar os itens.'
+    :'Compare o cupom do caixa com o carrinho (ou com uma compra do Histórico).';
+  if(m==='conferir')carregarBasesCupom();
+  else if(cupomItems.length)mostrarCupom();
+  if(m==='cadastrar'&&!document.getElementById('cup-data').value)document.getElementById('cup-data').value=hojeLocal();
+}
+async function carregarBasesCupom() {
+  const sel=document.getElementById('cup-base');
+  const sessoes=await dbGet('sessoes_compra','select=*&order=created_at.desc&limit=30');
+  sel.innerHTML=`<option value="carrinho">Carrinho atual (${cart.length} itens)</option>`+
+    (Array.isArray(sessoes)?sessoes:[]).map(h=>`<option value="${TextoSeguro.escapar(h.id)}">${new Date(h.data+'T12:00:00').toLocaleDateString('pt-BR')} · ${TextoSeguro.escapar(h.mercado||'Supermercado')} · ${fmtBRL(h.total)}</option>`).join('');
+  if(cupomItems.length)mostrarCupom();
+}
+function cupomBaseMudou(){ if(cupomItems.length)mostrarCupom(); }
+
 async function lerCupom(input) {
   const file=input.files[0]; if(!file)return;
   const btn=document.getElementById('cup-btn');
@@ -1185,7 +1482,7 @@ async function lerCupom(input) {
     const prompt=`Analise este cupom fiscal de supermercado brasileiro e liste TODOS os produtos.
 Responda APENAS com array JSON, sem nenhum texto antes ou depois:
 [{"nome":"Nome do produto","preco":0.00,"qtd":1}]`;
-    const resp=await ai(prompt,b64,file.type,'claude-sonnet-4-6',1500);
+    const resp=(await ia.claudeArquivo({prompt, b64, mime:file.type, model:SoloIa.MODELO_BARATO, maxTokens:1500})).texto;
     let itens=null;
     const parsed=extractJSON(resp);
     if(parsed){
@@ -1198,32 +1495,139 @@ Responda APENAS com array JSON, sem nenhum texto antes ou depois:
       alert('Não consegui ler o cupom.\n\nDicas:\n• Foto bem iluminada\n• Sem reflexo\n• Cupom plano e legível');
       btn.disabled=false;btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';input.value='';return;
     }
-    cupomItems=itens.map(i=>({nome:i.nome||i.name||'Item',preco:parseFloat(i.preco||i.price||0),qtd:parseFloat(i.qtd||i.qty||1)})).filter(i=>i.preco>0);
+    cupomItems=itens.map(i=>({id:++cupomCtr,nome:i.nome||i.name||'Item',preco:parseFloat(i.preco||i.price||0),qtd:parseFloat(i.qtd||i.qty||1)})).filter(i=>i.preco>0);
     if(!cupomItems.length){alert('Itens encontrados mas sem preços válidos. Tente foto mais clara.');btn.disabled=false;btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';input.value='';return;}
-    const total=cupomItems.reduce((s,i)=>s+i.preco*(i.qtd||1),0);
-    document.getElementById('cup-count').textContent=cupomItems.length+' ITENS ENCONTRADOS';
-    document.getElementById('cup-items').innerHTML=cupomItems.map(item=>`<div class="li"><div class="li-info"><div class="li-name">${item.nome}</div>${item.qtd!==1?`<div class="li-sub">× ${fmtN(item.qtd)}</div>`:''}</div><div class="li-price">${fmtBRL(item.preco*(item.qtd||1))}</div></div>`).join('');
-    document.getElementById('cup-total').textContent=fmtBRL(total);
-    document.getElementById('cup-result').style.display='block';
-    document.getElementById('cup-save').disabled=false;
-    document.getElementById('cup-save').innerHTML='<i class="ti ti-device-floppy"></i>Salvar';
+    respostasCupom={};
+    await mostrarCupom();
   } catch(e) {
     console.error('lerCupom:',e);
-    alert('Erro ao processar. Tente novamente com foto mais clara.');
+    alert('Erro ao processar: '+((e&&e.message)||e)+' - Tente novamente com foto mais clara.');
   }
   btn.disabled=false;btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';input.value='';
 }
-async function salvarCupom() {
-  const mercado=document.getElementById('cup-mercado').value.trim()||'Supermercado';
-  const total=cupomItems.reduce((s,i)=>s+i.preco*(i.qtd||1),0);
-  const sessao=await dbPost('sessoes_compra',{mercado,data:new Date().toISOString().split('T')[0],total});
-  if(sessao){
-    for(const item of cupomItems){
-      await dbPost('itens_compra',{sessao_id:sessao.id,nome:item.nome,preco:item.preco,qtd:item.qtd||1,subtotal:item.preco*(item.qtd||1)});
+
+function totalCupom(){ return round2(cupomItems.reduce((s,i)=>s+i.preco*(i.qtd||1),0)); }
+
+async function mostrarCupom() {
+  document.getElementById('cup-count').textContent=cupomItems.length+' ITENS NO CUPOM';
+  document.getElementById('cup-total').textContent=fmtBRL(totalCupom());
+  document.getElementById('cup-result').style.display='block';
+  const sv=document.getElementById('cup-save');
+  sv.style.display=cupomModo==='cadastrar'?'':'none';
+  if(cupomModo==='cadastrar')renderCupomCadastro(); else await renderConferencia();
+}
+
+function prepararCupom() {
+  const like=cupomItems.map(i=>({id:i.id,nome:i.nome,subtotal:round2(i.preco*(i.qtd||1))}));
+  return Gastos.prepararItensCompra(like,produtos.lista(),hojeList,respostasCupom);
+}
+function editarCupomItem(id,campo,v) {
+  const it=cupomItems.find(x=>x.id===id); if(!it)return;
+  if(campo==='nome')it.nome=String(v).trim()||it.nome;
+  else { const n=parseFloat(String(v).replace(',','.')); if(n>0)it[campo]=n; }
+  renderCupomCadastro();
+}
+function removerCupomItem(id){ cupomItems=cupomItems.filter(x=>x.id!==id); mostrarCupom(); }
+function responderCupomEssencial(id,v){ respostasCupom[id]={...(respostasCupom[id]||{}),essencial:v}; renderCupomCadastro(); }
+function responderCupomMesmoQue(id,pid){ respostasCupom[id]={...(respostasCupom[id]||{}),...(pid?{mesmoQue:pid}:{mesmoQueNao:true})}; renderCupomCadastro(); }
+
+function renderCupomCadastro() {
+  const E=TextoSeguro.escapar;
+  const prep=prepararCupom();
+  document.getElementById('cup-total').textContent=fmtBRL(totalCupom());
+  document.getElementById('cup-items').innerHTML=cupomItems.map(item=>{
+    const p=prep.find(x=>x.cartId===item.id)||{};
+    const resp=respostasCupom[item.id]||{};
+    let extra='';
+    if(!p.produtoId&&!resp.mesmoQue&&!resp.mesmoQueNao){
+      const sg=Nomes.sugerirProdutos(item.nome,produtos.lista(),1)[0];
+      if(sg&&sg.motivo==='parecido')extra+=`<div style="font-size:12px;margin-top:4px">Novo nome. É o mesmo que <strong>${E(sg.produto.nome)}</strong>? <button onclick="responderCupomMesmoQue(${item.id},'${E(sg.produto.id)}')">Sim</button> <button onclick="responderCupomMesmoQue(${item.id},null)">Não</button></div>`;
     }
-    const sb=document.getElementById('cup-save');
-    sb.innerHTML='<i class="ti ti-check"></i>Salvo!'; sb.disabled=true;
-  } else { alert('Erro ao salvar. Verifique o Supabase.'); }
+    if(p.classe===null)extra+=`<div style="margin-top:4px"><button onclick="responderCupomEssencial(${item.id},true)">Essencial</button> <button onclick="responderCupomEssencial(${item.id},false)">Supérfluo</button></div>`;
+    return `<div class="li" style="flex-wrap:wrap"><div class="li-info" style="min-width:0;flex:1">
+      <input value="${E(item.nome)}" style="width:100%" onchange="editarCupomItem(${item.id},'nome',this.value)">
+      <div style="display:flex;gap:6px;margin-top:4px"><input value="${String(item.preco).replace('.',',')}" inputmode="decimal" style="width:90px" onchange="editarCupomItem(${item.id},'preco',this.value)">
+      <span class="li-sub">×</span><input value="${String(item.qtd||1).replace('.',',')}" inputmode="decimal" style="width:60px" onchange="editarCupomItem(${item.id},'qtd',this.value)"></div>${extra}</div>
+      <div class="li-price">${fmtBRL(item.preco*(item.qtd||1))}</div>
+      <button class="ico-btn" onclick="removerCupomItem(${item.id})"><i class="ti ti-x"></i></button></div>`;
+  }).join('');
+  const faltam=prep.filter(p=>p.classe===null).length;
+  const sv=document.getElementById('cup-save');
+  sv.disabled=faltam>0; sv.innerHTML='<i class="ti ti-device-floppy"></i>Salvar';
+}
+
+async function salvarCupom() {
+  const prep=prepararCupom();
+  if(prep.some(p=>p.classe===null)){alert('Diga se cada item novo é essencial ou supérfluo.');return;}
+  const mercado=document.getElementById('cup-mercado').value.trim()||'Supermercado';
+  const local=document.getElementById('cup-local').value||'mercado';
+  const data=document.getElementById('cup-data').value||hojeLocal();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(data)){alert('Data inválida.');return;}
+  const total=totalCupom();
+  const sb=document.getElementById('cup-save'); sb.disabled=true;
+  const sessao=await dbPost('sessoes_compra',{mercado,data,total,local_tipo:local});
+  if(!sessao){alert('Erro ao salvar. Verifique o Supabase.');sb.disabled=false;return;}
+  const paraLotes=[];
+  for(const item of cupomItems){
+    const p=prep.find(x=>x.cartId===item.id);
+    const resp=respostasCupom[item.id]||{};
+    const prod=p.produtoId?produtos.lista().find(x=>x.id===p.produtoId):await produtos.garantir(item.nome);
+    if(prod&&Nomes.normalizar(item.nome)!==prod.chave)await produtos.adicionarApelido(prod.id,item.nome);
+    if(prod&&typeof resp.essencial==='boolean'&&prod.essencial!==resp.essencial)await produtos.marcar(prod.id,{essencial:resp.essencial});
+    const subtotal=round2(item.preco*(item.qtd||1));
+    await dbPost('itens_compra',{sessao_id:sessao.id,nome:item.nome,preco:item.preco,qtd:item.qtd||1,subtotal,produto_id:prod?prod.id:null,classe:p.classe});
+    if(prod)paraLotes.push({produtoId:prod.id,preco:subtotal,qtd:item.qtd||1});
+  }
+  await TelaProdutos.registrarLotes(paraLotes,data,local);
+  atualizarDatalist();
+  sb.innerHTML='<i class="ti ti-check"></i>Salvo!';
+}
+
+// ── CUPOM: conferir contra o caixa ───────────────────────────────────
+async function renderConferencia() {
+  const E=TextoSeguro.escapar;
+  const base=document.getElementById('cup-base').value||'carrinho';
+  if(base==='carrinho')cupomBaseItens=cart.map(i=>({id:i.id,nome:i.nome,subtotal:i.subtotal}));
+  else{
+    const r=await dbGet('itens_compra',`sessao_id=eq.${encodeURIComponent(base)}&select=*&order=created_at.asc`);
+    cupomBaseItens=(Array.isArray(r)?r:[]).map(i=>({id:i.id,nome:i.nome,subtotal:Number(i.subtotal||i.preco)||0}));
+  }
+  cupomComp=Gastos.compararCupom(cupomBaseItens,cupomItems);
+  const c=cupomComp;
+  const totApp=round2(cupomBaseItens.reduce((s,i)=>s+i.subtotal,0));
+  const lista=(t,arr,f)=>arr.length?`<div style="margin-top:8px"><strong>${t}</strong>${arr.map(x=>`<div class="li-sub">${f(x)}</div>`).join('')}</div>`:'';
+  const ok=!c.precoDiferente.length&&!c.soNoCupom.length&&!c.soNoApp.length;
+  document.getElementById('cup-items').innerHTML=
+    `<div style="font-size:14px">App ${fmtBRL(totApp)} · Cupom ${fmtBRL(totalCupom())} · Diferença <strong>${fmtBRL(c.diferencaTotal)}</strong></div>`+
+    (ok?'<div style="margin-top:8px;color:#2ea86b">Bateu! Cupom e app estão iguais.</div>':'')+
+    lista('Preço diferente',c.precoDiferente,x=>`${E(x.nome)}: app ${fmtBRL(x.app)} → cupom ${fmtBRL(x.cupom)}`)+
+    lista('Só no cupom (faltou no app)',c.soNoCupom,x=>`${E(x.nome)} · ${fmtBRL(x.subtotal)}`)+
+    lista('Só no app (não veio no cupom)',c.soNoApp,x=>`${E(x.nome)} · ${fmtBRL(x.subtotal)}`)+
+    `<div class="li-sub" style="margin-top:8px">${c.iguais.length} itens iguais</div>`+
+    (ok?'':`<button class="btn btn-p btn-bl" style="margin-top:10px" onclick="corrigirPeloCupom()">Corrigir pelo cupom</button>`);
+}
+
+async function corrigirPeloCupom() {
+  const c=cupomComp; if(!c)return;
+  if(!confirm('Corrigir '+(document.getElementById('cup-base').value==='carrinho'?'o carrinho':'a compra')+' pelo cupom? Preços serão trocados e itens que só estão no cupom serão acrescentados.'))return;
+  const base=document.getElementById('cup-base').value||'carrinho';
+  const remover=[];
+  for(const x of c.soNoApp){ if(confirm(`Remover "${x.nome}"? Ele não está no cupom.`))remover.push(x); }
+  if(base==='carrinho'){
+    for(const x of c.precoDiferente){const it=cart.find(i=>i.id===x.id);if(it){it.preco=x.precoCupom;it.qtd=x.qtdCupom;it.subtotal=x.cupom;delete it.precoKg;delete it.pesoG;}}
+    for(const x of c.soNoCupom)cart.push({id:++cartCtr,nome:x.nome,marca:'',tamanho:'',unidade:'',preco:x.preco,qtd:x.qtd,subtotal:x.subtotal});
+    cart=cart.filter(i=>!remover.some(r=>r.id===i.id));
+    updateTotal();
+  } else {
+    for(const x of c.precoDiferente)await dbPatch('itens_compra',x.id,{preco:x.precoCupom,qtd:x.qtdCupom,subtotal:x.cupom});
+    for(const x of c.soNoCupom)await dbPost('itens_compra',{sessao_id:base,nome:x.nome,preco:x.preco,qtd:x.qtd,subtotal:x.subtotal});
+    for(const x of remover)await dbDel('itens_compra',x.id);
+    const r=await dbGet('itens_compra',`sessao_id=eq.${encodeURIComponent(base)}&select=*`);
+    const novoTotal=round2((Array.isArray(r)?r:[]).reduce((s,i)=>s+(Number(i.subtotal||i.preco)||0),0));
+    await dbPatch('sessoes_compra',base,{total:novoTotal});
+  }
+  alert('Corrigido pelo cupom.');
+  await renderConferencia();
 }
 
 // ── HISTÓRICO ─────────────────────────────────────────────────────────
@@ -1241,7 +1645,7 @@ async function renderHistorico() {
     <div class="card" style="cursor:pointer;margin-bottom:8px" onclick="verCompra('${h.id}')">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div style="min-width:0;flex:1">
-          <div style="font-weight:500;font-size:15px">${h.mercado||'Supermercado'}</div>
+          <div style="font-weight:500;font-size:15px">${TextoSeguro.escapar(h.mercado||'Supermercado')}${h.local_tipo&&h.local_tipo!=='mercado'?' <span class="tag">'+({mercado:'Mercado',farmacia:'Farmácia',acougue:'Açougue',outro:'Outro'}[h.local_tipo]||'Outro')+'</span>':''}</div>
           <div class="li-sub">${new Date(h.data+'T12:00:00').toLocaleDateString('pt-BR')}</div>
         </div>
         <div style="font-weight:600;color:#FB5C32;font-size:17px;flex-shrink:0">${fmtBRL(h.total)}</div>
@@ -1261,15 +1665,15 @@ async function verCompra(id) {
   hd.innerHTML=`
     <button class="back-btn" onclick="renderHistorico()"><i class="ti ti-arrow-left"></i>Voltar</button>
     <div style="margin-bottom:14px">
-      <div style="font-size:18px;font-weight:600">${h.mercado||'Supermercado'}</div>
+      <div style="font-size:18px;font-weight:600">${TextoSeguro.escapar(h.mercado||'Supermercado')}</div>
       <div class="li-sub">${new Date(h.data+'T12:00:00').toLocaleDateString('pt-BR')} · ${itens.length} itens</div>
     </div>
     <div class="card">
       ${itens.map(item=>`
         <div class="li">
           <div class="li-info">
-            <div class="li-name">${item.nome}${item.marca?' · <span class="tag">'+item.marca+'</span>':''}</div>
-            <div class="li-sub">${[(item.tamanho||'')+(item.unidade||''),item.qtd>1?'× '+fmtN(item.qtd):'',fmtBRL(item.preco)+'/un'].filter(Boolean).join(' · ')}</div>
+            <div class="li-name">${TextoSeguro.escapar(item.nome)}${item.marca?' · <span class="tag">'+TextoSeguro.escapar(item.marca)+'</span>':''}${item.classe?' <span class="tag">'+({planejado:'Planejado',esquecido_essencial:'Esquecido essencial',impulso:'Impulso'}[item.classe]||'')+'</span>':''}</div>
+            <div class="li-sub">${item.peso_g?[fmtN(item.peso_g)+' g',fmtBRL(item.preco_kg)+'/kg'].join(' · '):[(item.tamanho||'')+(item.unidade||''),item.qtd>1?'× '+fmtN(item.qtd):'',fmtBRL(item.preco)+'/un'].filter(Boolean).join(' · ')}</div>
           </div>
           <div class="li-price">${fmtBRL(item.subtotal||item.preco)}</div>
         </div>`).join('')}
@@ -1277,6 +1681,7 @@ async function verCompra(id) {
       <div style="display:flex;justify-content:space-between;font-weight:600;font-size:16px">
         <span>Total</span><span style="color:#FB5C32">${fmtBRL(h.total)}</span>
       </div>
+      ${(()=>{const r=Gastos.resumoCompra(itens.map(i=>({classe:i.classe,subtotal:i.subtotal||i.preco})));return `<div class="li-sub" style="margin-top:8px">Planejado ${fmtBRL(r.planejado)} · Esquecido essencial ${fmtBRL(r.esquecido_essencial)} · Impulso ${fmtBRL(r.impulso)}${r.sem_classe>0?' · Sem classe '+fmtBRL(r.sem_classe):''}</div>`;})()}
     </div>`;
 }
 
@@ -1322,6 +1727,7 @@ function trocarUsuario() {
   if (!confirm('Sair da conta?')) return;
   auth.signOut();
   currentUser = null;
+  TelaFolhetos.limpar();
   document.getElementById('login-email').value = '';
   document.getElementById('login-senha').value = '';
   mostrarLogin();
@@ -1357,15 +1763,15 @@ async function buscarOpiniao(){
   document.getElementById('opiniao-box').style.display='none';
   try{
     const r=await claudeFetch({
-      model:'claude-sonnet-4-6',max_tokens:600,
+      model:SoloIa.MODELO_BARATO,max_tokens:600,
       tools:[{type:'web_search_20250305',name:'web_search'}],
-      messages:[{role:'user',content:'Pesquise opiniões sobre o produto "'+nome+'". Responda em português com: qualidade geral (nota /10), principais prós, principais contras, e conclusão se vale comprar. Seja objetivo e direto, máximo 8 linhas.'}]
+      messages:[{role:'user',content:'Pesquise opiniões sobre o produto "'+nome+'". Responda em português com: qualidade geral (nota /10), principais prós, principais contras, e conclusão se vale comprar. Seja objetivo e direto, máximo 8 linhas. Responda em texto simples, sem markdown.'}]
     });
     if(!r.ok){const e=await r.json();throw new Error(e.error?.message||'Erro '+r.status);}
     const d=await r.json();
     if(d.error)throw new Error(d.error.message);
     const text=d.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'Sem resultado.';
-    document.getElementById('opiniao-box').innerHTML='🔍 '+text;
+    document.getElementById('opiniao-box').innerHTML='🔍 '+TextoSeguro.mdSimples(text);
     document.getElementById('opiniao-box').style.display='block';
   }catch(e){alert('Erro ao buscar opiniões: '+e.message);}
   btn.disabled=false;btn.innerHTML='<i class="ti ti-world-search"></i>Buscar opiniões na web';
@@ -1910,13 +2316,26 @@ async function excluirReceita(id) {
 
 checkAutoLogin();
 </script>
+<!-- MODAL: ESSENCIAL OU SUPÉRFLUO (ao adicionar item fora da lista) -->
+<div id="modal-essencial" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:210;padding:20px" onclick="if(event.target===this)responderModalEssencial(null)">
+  <div style="background:#fff;border-radius:16px;max-width:360px;margin:22vh auto 0;padding:20px;text-align:center">
+    <div id="me-titulo" style="font-size:18px;font-weight:700"></div>
+    <div style="font-size:14px;color:#8e8e93;margin:8px 0 16px">Esse item não estava na lista. Ele é essencial ou supérfluo?</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="responderModalEssencial(true)" style="flex:1;padding:14px;border:none;border-radius:10px;background:#FB5C32;color:#fff;font-size:15px;font-weight:600">Essencial</button>
+      <button onclick="responderModalEssencial(false)" style="flex:1;padding:14px;border:1px solid #e5e5ea;border-radius:10px;background:#f2f2f7;font-size:15px;font-weight:600">Supérfluo</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CONFIRMAÇÃO DE COMPRA -->
 <div id="modal-confirmacao" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;padding:20px;overflow-y:auto">
   <div style="background:#fff;border-radius:16px;max-width:480px;margin:0 auto;overflow:hidden">
     <div style="padding:20px 20px 0">
       <div style="font-size:17px;font-weight:700;margin-bottom:4px">Confirmar compra</div>
-      <div style="font-size:13px;color:#8e8e93;margin-bottom:16px">Marque os itens que <strong>não</strong> foram comprados</div>
+      <div style="font-size:13px;color:#8e8e93;margin-bottom:16px">Marque os itens que <strong>não</strong> foram comprados. Itens fora da lista: diga se são essenciais.</div>
     </div>
+    <div id="modal-resumo" style="padding:0 20px 8px;font-size:13px;color:#1c1c1e"></div>
     <div id="modal-itens" style="padding:0 20px;max-height:50vh;overflow-y:auto"></div>
     <div style="padding:16px 20px;border-top:1px solid #f2f2f7;margin-top:12px">
       <div style="font-size:15px;font-weight:600;margin-bottom:14px">
@@ -1924,7 +2343,7 @@ checkAutoLogin();
       </div>
       <div style="display:flex;gap:8px">
         <button onclick="fecharModal()" style="flex:1;padding:12px;border:1px solid #e5e5ea;border-radius:10px;background:#f2f2f7;font-size:14px;font-weight:500;cursor:pointer">Cancelar</button>
-        <button onclick="confirmarCompra()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#FB5C32;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Confirmar compra</button>
+        <button id="modal-salvar" onclick="confirmarCompra()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#FB5C32;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Confirmar compra</button>
       </div>
     </div>
   </div>
