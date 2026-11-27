@@ -16,7 +16,7 @@
 - Repositório **público**: nada de chaves, tokens, senhas ou dados reais em código, testes, docs ou commits. Dados de teste são inventados.
 - Toda tabela nova: `owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade`, `enable row level security` e política `for all to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid())`. SQL idempotente em `supabase/`, mais rollback e guia em `docs/seguranca/guia-pedro.md`. **O Pedro roda o SQL no painel do Supabase**; o executor nunca altera conta, segurança ou configuração por conta própria.
 - Nada vai para o `main` (publica em produção na Vercel) sem OK explícito do Pedro. Commits locais são livres; `git push` do branch `parte2b` só na Task 10, com OK.
-- Não quebrar o que funciona: telas Receitas, Cardápio, Folhetos, Cupom, Comparar e Histórico continuam funcionando. A tela Cupom (`salvarCupom`) não muda nesta parte (suas compras não geram lotes nem classe).
+- Não quebrar o que funciona: telas Receitas, Cardápio, Folhetos, Comparar e Histórico continuam funcionando. A tela Cupom é estendida na Task 7b (cadastrar compra feita sem o app, e conferir contra o caixa); compras antigas do Cupom continuam no Histórico sem lote nem classe.
 - Compatibilidade: dados antigos (`itens_compra` sem `classe`, `produto_id` ou peso) continuam aparecendo no Histórico.
 - Estilo do código: sem framework; módulos JS no formato `if (typeof module !== 'undefined') module.exports = {...}; else window.X = {...};`; telas com dependências injetadas e `doc.getElementById`; sempre escapar texto do usuário com `TextoSeguro.escapar` ao montar HTML.
 - O Pedro tem TDAH: textos de tela e guia em português simples, curtos; guia com passos de clique e nomes exatos de menus; respostas dele no chat em N1 (telegráfico).
@@ -260,6 +260,32 @@ git add js/gastos.js tests/compra-regras.test.js index.html docs/seguranca/teste
 git commit -m "feat: peso variavel, essencial ou superfluo e resumo de gasto na compra"
 ```
 
+### Task 7b: Cupom: cadastrar compra feita sem o app e conferir contra o caixa
+
+Uso do Pedro (palavras dele): (a) comprou em farmácia/mercado/outro lugar sem abrir o app → fotografa o cupom depois e os itens entram "como se tivesse marcado item a item"; (b) no mercado o app serve de **acompanhamento do carrinho** (total) e no caixa o total do app deve bater com o do cupom; se não bater, o cupom mostra onde errou (digitação, promoção que acabou ou que ele não viu) e corrige.
+
+**Files:**
+- Modify: `js/gastos.js` (nova função pura), `index.html` (aba Cupom: `lerCupom`, `salvarCupom`, HTML da aba `s-cupom`)
+- Test: `tests/cupom-regras.test.js`
+
+**Interfaces:**
+- Consumes: `sugerirProdutos`/`normalizar` (Task 2), `prepararItensCompra` (Task 7), `TelaProdutos.registrarLotes` (Task 9).
+- Produces em `js/gastos.js`: `compararCupom(itensApp: Array<{nome, subtotal}>, itensCupom: Array<{nome, preco, qtd}>): { iguais: Item[], precoDiferente: Array<{nome, app: number, cupom: number}>, soNoCupom: Item[], soNoApp: Item[], diferencaTotal: number }` — casa itens por `normalizar(nome)` igual ou por palavras em comum (mesma regra de `sugerirProdutos`); `precoDiferente` quando o subtotal difere em mais de R$ 0,01; `diferencaTotal = totalCupom - totalApp` (2 casas).
+
+- [ ] **Step 1: Escrever `tests/cupom-regras.test.js`:** `compararCupom` com itens iguais; com preço diferente (promoção que não valeu: app 5,99 × cupom 7,49); item só no cupom (esquecido no app); item só no app; `diferencaTotal` positivo e negativo; nomes de cupom em caixa alta e abreviados ("LEITE UHT DESN 1L" casa com "Leite desnatado") contam como o mesmo item quando compartilham palavras.
+- [ ] **Step 2: Rodar e ver falhar, implementar `compararCupom`, rodar e ver passar:** `node --test tests/cupom-regras.test.js`
+- [ ] **Step 3: Aba Cupom com dois modos** (botões no topo): **Cadastrar compra do cupom** e **Conferir compra**. Ambos leem a foto como hoje (`lerCupom`), com `ia.claudeArquivo` e modelo barato.
+- [ ] **Step 4: "Cadastrar compra do cupom"** (compra sem o app): depois de ler, mostrar a lista editável (nome, preço, qtd), campos **Local** (Mercado/Farmácia/Açougue/Outro), **Nome do lugar** e **Data da compra** (padrão hoje, editável). Cada item é ligado a um produto como na Task 7 (sugestão de nome "É o mesmo que X?", **Essencial/Supérfluo** para produto sem marca). `salvarCupom` grava `sessoes_compra` (com `local_tipo`) e `itens_compra` com `produto_id` e `classe` (`classificarItem` com a lista Hoje do momento; produto sem resposta fica `null`), e cria os lotes com `TelaProdutos.registrarLotes(itens, dataCompra, localTipo)`. O resultado é igual ao de uma compra feita item a item.
+- [ ] **Step 5: "Conferir compra"**: o Pedro escolhe a base da comparação: o **carrinho atual** do app (antes de salvar) ou uma **compra do Histórico**. Depois de ler o cupom, mostrar `compararCupom`: total do app x total do cupom, e as quatro listas (iguais, preço diferente, só no cupom, só no app) em português simples. Botão **Corrigir pelo cupom** (com confirmação): no carrinho atual, atualiza preços, acrescenta o que só está no cupom e remove o que só está no app (cada remoção pede confirmação); numa compra do Histórico, atualiza `itens_compra` e `sessoes_compra.total` com `dbPatch`/`dbPost`/`dbDel`. Nada é apagado sem o Pedro tocar em confirmar.
+- [ ] **Step 6: Carrinho como acompanhamento:** no topo da aba Comprar, o total do carrinho fica grande e sempre visível (já existe `updateTotal`; só conferir que aparece sem rolar a página no celular).
+- [ ] **Step 7: Rodar** `node --test tests/`. **Teste manual** (após Task 1): foto de um cupom real da farmácia → conferir itens, salvar, ver a compra no Histórico com o local e a aba Produtos com os lotes; montar um carrinho com 1 preço errado de propósito, fotografar o cupom e ver a diferença apontada e corrigida. Registrar em `docs/seguranca/teste-manual-2b.md`.
+- [ ] **Step 8: Commit local**
+
+```bash
+git add js/gastos.js tests/cupom-regras.test.js index.html docs/seguranca/teste-manual-2b.md
+git commit -m "feat: cupom cadastra compra feita sem o app e confere contra o caixa"
+```
+
 ### Task 8: Duração e custo por dia (puro)
 
 **Files:**
@@ -360,6 +386,9 @@ git commit -m "feat: aba Produtos com duracao, custo por dia, acabou e sugeridos
 - [ ] **Step 7: Registrar** os resultados em `docs/seguranca/verificacao-2b.md` e acrescentar seção datada em `C:\CLAUDE\curto-prazo\solo-app.md` (estado, decisões, próximos passos) com os comandos de envio do núcleo.
 
 ---
+
+## Requisito futuro registrado (Parte 3a, plano próprio): leitura por câmera no mercado
+Pedro quer apontar a câmera para a etiqueta de preço e o app ler produto, preço, marca e peso; ele só informa a quantidade (contar itens do carrinho pela foto fica para depois). Também ler o **código de barras** e buscar o produto numa base pública (Open Food Facts, Cosmos) antes de usar IA, guardando cada código já resolvido na própria conta. No iPhone o Safari não tem leitor de código de barras nativo: precisa de biblioteca em JavaScript (ZXing) a testar no aparelho. Etiqueta de gôndola costuma ter código interno do mercado: o preço continua vindo da leitura da etiqueta.
 
 ## Depois deste plano (Parte 3, plano próprio)
 Aviso diário por notificação no iPhone às 16h do Amazonas (PWA, Web Push, tarefa agendada em Python), atalho do iPhone com token longo trocável, e depois câmera/QR, integração com o app de finanças e relatório por categoria. As colunas `essencial`, `urgencia` e `local_tipo` já ficam gravadas por esta parte para esses relatórios.
