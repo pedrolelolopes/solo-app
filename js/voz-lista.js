@@ -1,5 +1,5 @@
 // Separa uma nota falada ou digitada em itens de compra (regras locais, sem IA).
-const _N = typeof require !== 'undefined' ? require('./nomes.js') : window.Nomes;
+const _NomesV = typeof require !== 'undefined' ? require('./nomes.js') : window.Nomes;
 
 // mais longos primeiro, para "acabou o" vencer "acabou"
 const PREFIXOS = ['preciso comprar', 'preciso de', 'colocar na lista', 'acabou o', 'acabou a', 'acabou',
@@ -28,7 +28,7 @@ function separarItens(texto) {
   const saida = [];
   for (const p of partes) {
     const item = limparTrecho(p);
-    const chave = _N.normalizar(item);
+    const chave = _NomesV.normalizar(item);
     if (!chave || chave === 'e' || vistos.has(chave)) continue;
     vistos.add(chave);
     saida.push(item);

@@ -325,6 +325,17 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
   <!-- HOJE -->
   <div id="st-hoje">
     <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Nota rápida</div>
+      <textarea id="nr-texto" rows="2" style="width:100%" placeholder="Ex.: papel higiênico, filtro de café e sabonete"></textarea>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-s btn-sm" id="nr-voz-btn" style="flex:1" onclick="TelaListaRapida.alternarVoz()">🎤 Falar</button>
+        <button class="btn btn-s btn-sm" style="flex:1" onclick="TelaListaRapida.analisar()">Conferir</button>
+        <button class="btn btn-p btn-sm" id="nr-adicionar-btn" style="flex:1" onclick="TelaListaRapida.confirmar()">Adicionar à lista</button>
+      </div>
+      <div id="nr-aviso" style="font-size:13px;color:#8e8e93;margin-top:6px"></div>
+      <div id="nr-revisao" style="margin-top:6px"></div>
+    </div>
+    <div class="card" style="margin-bottom:10px">
       <div style="display:flex;gap:8px">
         <input id="hoje-input" placeholder="O que preciso hoje..." style="flex:1" oninput="updateAC()" onkeydown="if(event.key==='Enter')addHoje()" autocomplete="off">
         <button class="btn btn-p btn-sm" onclick="addHoje()"><i class="ti ti-plus"></i></button>
@@ -556,6 +567,10 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 <script src="js/ia.js"></script>
 <script src="js/folhetos.js"></script>
 <script src="js/tela-folhetos.js"></script>
+<script src="js/nomes.js"></script>
+<script src="js/produtos.js"></script>
+<script src="js/voz-lista.js"></script>
+<script src="js/tela-lista-rapida.js"></script>
 <script>
 // ── CONFIG / LOGIN / BANCO (módulos em js/) ───────────────────────────
 const auth = SoloAuth.createAuth({
@@ -652,7 +667,7 @@ let sessaoMercado='';
 
 // ── INIT ─────────────────────────────────────────────────────────────
 async function init() {
-  await Promise.all([loadLista(), loadHoje()]);
+  await Promise.all([loadLista(), loadHoje(), produtos.carregar()]);
   renderQueue(); renderHoje(); renderFixos(); updateTotal();
 }
 
@@ -989,6 +1004,28 @@ const TelaFolhetos = createTelaFolhetos({
   db: { dbGet, dbPost, dbPatch, dbDel }, ia, toB64, doc: document,
   avisar: m => { const e = document.getElementById('fol-aviso'); if (e) e.textContent = m; },
   getLista: () => lista, confirmar: m => confirm(m), claudeTexto: claudeText
+});
+
+// ── NOTA RÁPIDA / PRODUTOS ───────────────────────────────────────────
+const produtos = SoloProdutos.createProdutos({ db: { dbGet, dbPost, dbPatch, dbDel } });
+const vozNota = (() => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null;
+  return {
+    suportado: !!SR,
+    iniciar(aoTexto, aoFim) {
+      rec = new SR(); rec.lang = 'pt-BR'; rec.continuous = false; rec.interimResults = false;
+      rec.onresult = e => { aoTexto(Array.from(e.results).map(r => r[0].transcript).join(' ')); };
+      rec.onend = () => aoFim(); rec.onerror = () => aoFim();
+      rec.start();
+    },
+    parar() { if (rec) rec.stop(); }
+  };
+})();
+const TelaListaRapida = createTelaListaRapida({
+  db: { dbGet, dbPost, dbPatch, dbDel }, produtos, doc: document, voz: vozNota,
+  getHoje: () => hojeList,
+  aoAdicionar: criados => { hojeList.push(...criados); renderHoje(); renderQueue(); }
 });
 
 // ── LISTA — HOJE ─────────────────────────────────────────────────────
