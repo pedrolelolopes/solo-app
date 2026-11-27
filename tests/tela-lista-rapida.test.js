@@ -212,3 +212,44 @@ test('nome com HTML aparece escapado na prévia', async () => {
   assert.ok(!doc.els['nr-revisao'].innerHTML.includes('<img'));
   assert.match(doc.els['nr-revisao'].innerHTML, /&lt;img/);
 });
+
+test('pergunta velha some quando o nome muda: "leite de magnésio", "leite" + "sem lactose"', async () => {
+  const { t, falar, doc, produtos } = mkFala(); await produtos.carregar();
+  t.alternarVoz();
+  await falar('leite de magnésio');
+  await falar('leite');
+  assert.match(previaTxt(doc), /é o mesmo que/); // "leite" ⊂ "leite de magnésio": ainda pode ser o mesmo
+  await falar('sem lactose');
+  assert.ok(!previaTxt(doc).includes('é o mesmo que'));
+});
+test('responder Não não pergunta de novo o mesmo par', async () => {
+  const { t, doc, produtos } = mk(); await produtos.carregar();
+  t.adicionarTexto('chá');
+  t.adicionarTexto('chá de cidreira');
+  t.responder(1, false);
+  t.adicionarTexto('arroz');
+  assert.ok(!previaTxt(doc).includes('é o mesmo que'));
+});
+test('"leite sem" + "quero dizer leite integral" (frases separadas) fica "Leite integral"', async () => {
+  const { t, falar, calls, produtos } = mkFala(); await produtos.carregar();
+  t.alternarVoz();
+  await falar('leite sem');
+  await falar('quero dizer leite integral');
+  await t.adicionar();
+  assert.deepStrictEqual(linhas(calls).map(l => l.nome), ['Leite integral']);
+});
+test('"tomate, aquele tomate pequenininho, tomate cereja" (falado em partes) vira "Tomate cereja"', async () => {
+  const { t, falar, calls, produtos } = mkFala(); await produtos.carregar();
+  t.alternarVoz();
+  await falar('tomate');
+  await falar('aquele tomate pequenininho');
+  await falar('tomate cereja');
+  await t.adicionar();
+  assert.deepStrictEqual(linhas(calls).map(l => l.nome), ['Tomate cereja']);
+});
+test('"tomate, aquele tomate pequenininho, tomate cereja" (digitado de uma vez) vira 1 item', async () => {
+  const { t, calls, produtos } = mk(); await produtos.carregar();
+  t.adicionarTexto('tomate, aquele tomate pequenininho, tomate cereja');
+  await t.adicionar();
+  assert.deepStrictEqual(linhas(calls).map(l => l.nome), ['Tomate cereja']);
+});

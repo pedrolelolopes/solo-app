@@ -18,7 +18,9 @@ const INICIO_CONTINUA = new Set(['sem', 'com', 'de', 'da', 'do', 'das', 'dos', '
 function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, perguntar }) {
   const esc = _Ts.escapar;
   const el = id => doc.getElementById(id);
-  let previa = []; // {uid, nome, original, detalhe, pergunta: uid|null}
+  let previa = []; // {uid, nome, original, detalhe}
+  let negados = new Set(); // pares que o Pedro disse que NÃO são o mesmo (só nesta prévia)
+  let refinaProximo = false; // acabou de falar uma descrição solta: o próximo item refina o anterior
   let seq = 0;
   let ouvindo = false;
   let sobra = ''; // começo de frase esperando o resto
@@ -35,9 +37,16 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
     return menor.size >= 1 && menor.size < maior.size && [...menor].every(w => maior.has(w));
   }
 
+  const chavePar = (a, b) => [a.uid, b.uid].sort().join('|');
+  // Pergunta só vale para os nomes de AGORA (se o nome mudou, a pergunta velha some) e uma vez por par.
+  function perguntaDe(i) {
+    const r = previa[i];
+    return previa.slice(0, i).find(x => relacionados(x.nome, r.nome) && !negados.has(chavePar(x, r))) || null;
+  }
+
   function desenhar() {
     el('nr-revisao').innerHTML = previa.map((r, i) => {
-      const alvo = r.pergunta ? previa.find(x => x.uid === r.pergunta) : null;
+      const alvo = perguntaDe(i);
       const q = alvo
         ? `<div class="nr-q"><strong>${esc(r.nome)}</strong> é o mesmo que <strong>${esc(alvo.nome)}</strong>? ` +
           `<button onclick="TelaListaRapida.responder(${i},true)">Sim</button> ` +
@@ -55,8 +64,15 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
     let n = 0;
     for (const it of itens) {
       if (previa.some(p => base(p.nome) === base(it.nome))) continue;
-      const rel = previa.find(p => relacionados(p.nome, it.nome));
-      previa.push({ uid: ++seq, nome: it.nome, original: it.nome, detalhe: it.detalhe || '', pergunta: rel ? rel.uid : null });
+      const ult = previa[previa.length - 1];
+      const refina = it.refina || refinaProximo;
+      refinaProximo = false;
+      if (refina && ult && relacionados(ult.nome, it.nome)) { // "tomate ... aquele pequenininho ... tomate cereja"
+        if (palavrasDe(it.nome).size >= palavrasDe(ult.nome).size) ult.nome = it.nome;
+        ult.detalhe = ult.detalhe || it.detalhe || '';
+        continue;
+      }
+      previa.push({ uid: ++seq, nome: it.nome, original: it.nome, detalhe: it.detalhe || '' });
       n++;
     }
     desenhar();
@@ -65,7 +81,10 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
 
   // Texto digitado ou frase falada já completa.
   function adicionarTexto(texto) {
-    return incluir(_Vz.separarItensComDetalhe(texto, conhecidos()));
+    const itens = _Vz.separarItensComDetalhe(texto, conhecidos());
+    const n = incluir(itens);
+    if (itens.descricoes && !itens.length) refinaProximo = true;
+    return n;
   }
 
   // Fala: junta pedaços ("filtro de papel para" + "café", "leite" + "sem lactose") antes de pôr na prévia.
@@ -73,6 +92,12 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
     let t = (sobra + ' ' + String(txt || '')).trim();
     sobra = '';
     if (!t) return 0;
+    const corr = _Vz.tirarCorrecao(t); // "quero dizer leite integral": troca o último item
+    if (corr.corrige) {
+      previa.pop();
+      t = corr.resto;
+      if (!t) { desenhar(); return 0; }
+    }
     const palavras = _Nm.normalizar(t).split(' ');
     if (FIM_INCOMPLETO.has(palavras[palavras.length - 1])) { sobra = t; return 0; }
     const ult = previa[previa.length - 1];
@@ -82,6 +107,7 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
       return 0;
     }
     const itens = _Vz.separarItensComDetalhe(t, conhecidos());
+    if (itens.descricoes && !itens.length) { refinaProximo = true; return 0; }
     if (ult && itens.length) {
       if (base(ult.nome) === base(itens[0].nome)) itens.shift(); // eco ("leite", "leites")
       else {
@@ -97,14 +123,14 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
 
   function responder(i, sim) {
     const r = previa[i]; if (!r) return;
-    const alvo = previa.find(x => x.uid === r.pergunta);
-    if (sim && alvo) {
+    const alvo = perguntaDe(i);
+    if (!alvo) return;
+    if (sim) {
       const maior = palavrasDe(r.nome).size >= palavrasDe(alvo.nome).size ? r : alvo;
       const outro = maior === r ? alvo : r;
       maior.detalhe = maior.detalhe || outro.detalhe;
-      maior.pergunta = null;
       previa = previa.filter(x => x !== outro);
-    } else r.pergunta = null;
+    } else negados.add(chavePar(alvo, r));
     desenhar();
   }
 
@@ -118,7 +144,7 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
     if (!prod) { aviso('Não consegui corrigir. Tente de novo.'); return; }
     // aprende: o que foi ouvido/escrito errado passa a valer como esse produto
     if (r.original && canon(r.original) !== canon(prod.nome)) await produtos.adicionarApelido(prod.id, r.original);
-    r.nome = prod.nome; r.pergunta = null;
+    r.nome = prod.nome;
     aviso('Corrigido para ' + prod.nome + '.');
     desenhar();
   }
@@ -154,7 +180,7 @@ function createTelaListaRapida({ db, produtos, doc, aoAdicionar, voz, getHoje, p
       if (!linha) continue;
       criados.push(linha); pend.push(linha);
     }
-    previa = [];
+    previa = []; negados = new Set(); refinaProximo = false;
     desenhar();
     if (criados.length && aoAdicionar) aoAdicionar(criados);
     if (criados.length) aviso(`${criados.length} item(ns) na lista.` + (repetidos ? ` ${repetidos} já estava(m).` : ''));

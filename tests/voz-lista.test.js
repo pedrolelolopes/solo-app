@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { separarItens, separarItensComDetalhe } = require('../js/voz-lista.js');
+const { separarItens, separarItensComDetalhe, tirarCorrecao } = require('../js/voz-lista.js');
 
 test('separa por vírgula e "e"', () => assert.deepStrictEqual(
   separarItens('papel higiênico, filtro de café e sabonete'), ['papel higiênico', 'filtro de café', 'sabonete']));
@@ -56,3 +56,22 @@ test('"para café" (minúscula) e nomes conhecidos não viram detalhe', () => {
 });
 test('mesmo conhecido com maiúscula do reconhecedor não vira detalhe ("Filtro de papel para Café")', () =>
   assert.deepStrictEqual(separarItensComDetalhe('Filtro de papel para Café', CONHECIDOS.concat('filtro de papel para café')), [{ nome: 'Filtro de papel para Café', detalhe: '' }]));
+
+test('"leite sem, quero dizer leite integral" fica só "leite integral"', () =>
+  assert.deepStrictEqual(separarItens('leite sem, quero dizer leite integral'), ['leite integral']));
+test('marcador no meio do trecho: vale o que vem depois', () =>
+  assert.deepStrictEqual(separarItens('leite sem quero dizer leite integral'), ['leite integral']));
+test('"na verdade" e "ou melhor" também corrigem, sem apagar itens anteriores', () => {
+  assert.deepStrictEqual(separarItens('arroz, feijão, na verdade, macarrão'), ['arroz', 'macarrão']);
+  assert.deepStrictEqual(separarItens('café, ou melhor, chá'), ['chá']);
+});
+test('tirarCorrecao detecta marcador no começo da frase', () => {
+  assert.deepStrictEqual(tirarCorrecao('quero dizer leite integral'), { corrige: true, resto: 'leite integral' });
+  assert.deepStrictEqual(tirarCorrecao('leite integral'), { corrige: false, resto: 'leite integral' });
+});
+test('"tomate, aquele tomate pequenininho, tomate cereja": descrição some e o último refina o primeiro', () => {
+  const r = separarItensComDetalhe('tomate, aquele tomate pequenininho, tomate cereja');
+  assert.deepStrictEqual(r.map(x => x.nome), ['tomate', 'tomate cereja']);
+  assert.strictEqual(r[1].refina, true);
+  assert.strictEqual(r.descricoes, 1);
+});

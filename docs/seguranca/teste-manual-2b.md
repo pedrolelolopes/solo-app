@@ -42,3 +42,8 @@ Marque cada item depois de testar. Dados de teste inventados; nada de dados reai
 - [ ] "Chá pro Manuel" → item "Chá" com "(pro Manuel)"; depois "chá de cidreira, né" → pergunta "é o mesmo que Chá?"; Sim junta, ficando "Chá de cidreira (pro Manuel)".
 - [ ] "Leite" (segura) "sem lactose" → 1 item "Leite sem lactose" (sem "leites" repetido).
 - [ ] "né" no fim da frase é ignorado.
+
+## Voz — rodada 4
+- [ ] "Leite sem" (pausa) "quero dizer leite integral" → só "Leite integral".
+- [ ] "Tomate" (pausa) "aquele tomate pequenininho" (pausa) "tomate cereja" → só "Tomate cereja".
+- [ ] "Leite de magnésio", depois "leite" (pausa) "sem lactose" → não pergunta nada sobre magnésio; responder Não numa pergunta não repete.

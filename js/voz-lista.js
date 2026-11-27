@@ -87,16 +87,42 @@ function tirarDetalhe(trecho, set) {
   return { nome: m[1], detalhe: m[2] + ' ' + m[3] };
 }
 
-// Devolve [{nome, detalhe}].
+// "leite sem, quero dizer leite integral": o que vem depois do marcador corrige e o que veio antes é descartado.
+const MARCADOR_CORRECAO = /(?:^|\s)(?:quero dizer|quer dizer|ou melhor|melhor dizendo|na verdade|aliás|corrigindo|digo)(?:[,:]|\s|$)\s*/i;
+const DEMONSTRATIVOS = new Set(['aquele', 'aquela', 'aqueles', 'aquelas', 'aquilo', 'esse', 'essa', 'esses', 'essas', 'isso']);
+
+// Se o texto COMEÇA com um marcador de correção, devolve {corrige: true, resto}.
+function tirarCorrecao(texto) {
+  const t = String(texto || '').trim();
+  const m = t.match(MARCADOR_CORRECAO);
+  if (m && m.index === 0 || (m && t.slice(0, m.index).trim() === '')) return { corrige: true, resto: t.slice(m.index + m[0].length).trim() };
+  return { corrige: false, resto: t };
+}
+
+// Devolve [{nome, detalhe, refina}] (e .descricoes = quantos trechos descritivos foram descartados).
+// refina: veio depois de uma descrição solta ("aquele pequenininho"): refina o item anterior.
 function separarItensComDetalhe(texto, conhecidos) {
   const set = conhecidos ? new Set([...conhecidos].map(c => _NomesV.canonico(c)).filter(Boolean)) : null;
-  const partes = String(texto || '').split(/[,;\n]+|\s+e\s+/i);
+  const brutos = [];
+  for (const p of String(texto || '').split(/[,;\n]+|\s+e\s+/i)) {
+    let t = p.trim();
+    const m = t.match(MARCADOR_CORRECAO);
+    if (m) {
+      const antes = t.slice(0, m.index).trim();
+      if (!antes) brutos.pop();            // o trecho anterior era um engano
+      t = t.slice(m.index + m[0].length).trim(); // dentro do mesmo trecho: vale só o que vem depois
+    }
+    if (t) brutos.push(t);
+  }
   const vistos = new Set();
   const saida = [];
-  for (const p of partes) {
+  Object.defineProperty(saida, 'descricoes', { value: 0, writable: true, enumerable: false });
+  let aposDescricao = false;
+  for (const p of brutos) {
     const limpo = limparFala(limparTrecho(limparFala(p)));
     if (!_NomesV.normalizar(limpo)) continue;
     if (ENCHIMENTO_FIM.has(limpo.toLowerCase()) || ENCHIMENTO_INICIO.has(limpo.toLowerCase())) continue; // só enchimento ("né")
+    if (DEMONSTRATIVOS.has(_NomesV.normalizar(limpo).split(' ')[0])) { saida.descricoes++; aposDescricao = true; continue; } // "aquele tomate pequenininho"
     const { nome, detalhe } = tirarDetalhe(limpo, set);
     const itens = segmentarConhecidos(nome, set);
     itens.forEach((item, k) => {
@@ -104,8 +130,11 @@ function separarItensComDetalhe(texto, conhecidos) {
       const chave = _NomesV.chaveBase(final);
       if (!chave || chave === 'e' || vistos.has(chave)) return;
       vistos.add(chave);
-      saida.push({ nome: final, detalhe: k === itens.length - 1 ? detalhe : '' });
+      const it = { nome: final, detalhe: k === itens.length - 1 ? detalhe : '' };
+      if (aposDescricao && k === 0) it.refina = true;
+      saida.push(it);
     });
+    aposDescricao = false;
   }
   return saida;
 }
@@ -114,5 +143,5 @@ function separarItens(texto, conhecidos) {
   return separarItensComDetalhe(texto, conhecidos).map(x => x.nome);
 }
 
-if (typeof module !== 'undefined') module.exports = { separarItens, separarItensComDetalhe };
-else window.VozLista = { separarItens, separarItensComDetalhe };
+if (typeof module !== 'undefined') module.exports = { separarItens, separarItensComDetalhe, tirarCorrecao };
+else window.VozLista = { separarItens, separarItensComDetalhe, tirarCorrecao };
