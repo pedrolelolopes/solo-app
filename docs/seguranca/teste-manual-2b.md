@@ -60,3 +60,9 @@ Marque cada item depois de testar. Dados de teste inventados; nada de dados reai
 - [ ] Fila "Da lista de hoje": uma seta só, cartão inteiro clicável; ao tocar, o teclado de números já abre no preço (iPhone).
 - [ ] Adicionar item que não estava na lista abre o pop-up Essencial/Supérfluo, **toda vez** (mesmo produto já marcado antes).
 - [ ] Confirmar compra: a caixinha marca e fica marcada ao tocar.
+
+## Cupom: descontos, local e salvar (em produção, com foto)
+- [ ] Cupom de farmácia com desconto no item (ex.: R$ 140,20 − R$ 22,43): a linha mostra "R$ 140,20 − R$ 22,43 de desconto" e o valor pago R$ 117,77; o total do cupom é R$ 117,77.
+- [ ] Nome da farmácia/mercado, tipo (Farmácia, Mercado…) e data vêm preenchidos pelo cupom.
+- [ ] Botão **Salvar compra** sempre ligado; ao tocar, pergunta Essencial/Supérfluo de cada item que não estava na lista (pop-up, um por vez). Depois aparece "Compra salva no Histórico" e a compra está lá, com o local.
+- [ ] Desconto geral (sem item dono): repartido pelos itens; a soma bate com o total do cupom. Se não bater, aparece aviso vermelho.

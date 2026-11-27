@@ -827,10 +827,19 @@ function abrirModalEssencial(id) {
   document.getElementById('me-titulo').textContent = it.nome;
   document.getElementById('modal-essencial').style.display = 'block';
 }
+let meResolve = null;
+function perguntarEssencial(nome) { // devolve true (essencial), false (supérfluo) ou null (fechou)
+  return new Promise(res => {
+    meResolve = res; meId = null;
+    document.getElementById('me-titulo').textContent = nome;
+    document.getElementById('modal-essencial').style.display = 'block';
+  });
+}
 function responderModalEssencial(v) {
+  document.getElementById('modal-essencial').style.display = 'none';
+  if (meResolve) { const r = meResolve; meResolve = null; r(typeof v === 'boolean' ? v : null); return; }
   if (meId !== null) responderEssencialCarrinho(meId, v);
   meId = null;
-  document.getElementById('modal-essencial').style.display = 'none';
 }
 
 function addFromQueue(hojeId) {
@@ -1446,7 +1455,7 @@ async function excluirFixo(id) {
 }
 
 // ── CUPOM ─────────────────────────────────────────────────────────────
-let cupomModo='cadastrar', respostasCupom={}, cupomCtr=0, cupomBaseItens=[], cupomComp=null;
+let cupomModo='cadastrar', respostasCupom={}, cupomCtr=0, cupomBaseItens=[], cupomComp=null, cupomTotalLido=0;
 const LOCAIS_NOME={mercado:'Mercado',farmacia:'Farmácia',acougue:'Açougue',outro:'Outro'};
 const round2=n=>Math.round(n*100)/100;
 
@@ -1479,25 +1488,27 @@ async function lerCupom(input) {
   document.getElementById('cup-result').style.display='none';
   try {
     const b64=await toB64(file);
-    const prompt=`Analise este cupom fiscal de supermercado brasileiro e liste TODOS os produtos.
-Responda APENAS com array JSON, sem nenhum texto antes ou depois:
-[{"nome":"Nome do produto","preco":0.00,"qtd":1}]`;
+    const prompt=`Analise este cupom fiscal brasileiro e liste TODOS os produtos.
+Responda APENAS com JSON, sem nenhum texto antes ou depois:
+{"local":"nome do estabelecimento","tipo":"mercado|farmacia|acougue|outro","data":"AAAA-MM-DD","itens":[{"nome":"Nome do produto","qtd":1,"preco":0.00,"desconto":0.00}],"desconto_geral":0.00,"total":0.00}
+Regras: preco = preço UNITÁRIO de tabela, antes de qualquer desconto. Se logo abaixo de um item houver linha de desconto, cupom ou promoção, ponha o valor (positivo) em desconto DESSE item (valor da linha toda). Use desconto_geral só para desconto da compra inteira que não pertence a um item. total = valor final pago. Números com ponto decimal. Se não souber local, tipo ou data, deixe vazio.`;
     const resp=(await ia.claudeArquivo({prompt, b64, mime:file.type, model:SoloIa.MODELO_BARATO, maxTokens:1500})).texto;
-    let itens=null;
-    const parsed=extractJSON(resp);
-    if(parsed){
-      if(Array.isArray(parsed))itens=parsed;
-      else if(parsed.itens)itens=parsed.itens;
-      else if(parsed.items)itens=parsed.items;
-    }
-    if(!itens){const m=resp.match(/\[[\s\S]*\]/);if(m)try{itens=JSON.parse(m[0]);}catch{}}
-    if(!itens||!itens.length){
+    let parsed=extractJSON(resp);
+    if(!parsed){const m=resp.match(/\[[\s\S]*\]/);if(m)try{parsed=JSON.parse(m[0]);}catch{}}
+    const leitura=Gastos.normalizarCupom(parsed);
+    const itens=leitura.itens;
+    if(!itens.length){
       alert('Não consegui ler o cupom.\n\nDicas:\n• Foto bem iluminada\n• Sem reflexo\n• Cupom plano e legível');
       btn.disabled=false;btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';input.value='';return;
     }
-    cupomItems=itens.map(i=>({id:++cupomCtr,nome:i.nome||i.name||'Item',preco:parseFloat(i.preco||i.price||0),qtd:parseFloat(i.qtd||i.qty||1)})).filter(i=>i.preco>0);
-    if(!cupomItems.length){alert('Itens encontrados mas sem preços válidos. Tente foto mais clara.');btn.disabled=false;btn.innerHTML='<i class="ti ti-camera"></i>Fotografar cupom';input.value='';return;}
+    // o que vale é o preço PAGO: desconto do item sai do item; desconto geral sem dono é repartido
+    cupomItems=Gastos.aplicarDescontos(itens,leitura.descontoGeral).map(i=>({id:++cupomCtr,...i}));
+    cupomTotalLido=leitura.total;
     respostasCupom={};
+    // local, tipo e data lidos do cupom (só se o campo ainda estiver vazio)
+    const cm=document.getElementById('cup-mercado'); if(leitura.local&&!cm.value.trim())cm.value=leitura.local;
+    if(leitura.tipo)document.getElementById('cup-local').value=leitura.tipo;
+    const cd=document.getElementById('cup-data'); if(leitura.data&&leitura.data<=hojeLocal())cd.value=leitura.data;
     await mostrarCupom();
   } catch(e) {
     console.error('lerCupom:',e);
@@ -1524,41 +1535,38 @@ function prepararCupom() {
 function editarCupomItem(id,campo,v) {
   const it=cupomItems.find(x=>x.id===id); if(!it)return;
   if(campo==='nome')it.nome=String(v).trim()||it.nome;
-  else { const n=parseFloat(String(v).replace(',','.')); if(n>0)it[campo]=n; }
+  else { const n=Gastos.numeroCupom(v); if(n>0){ it[campo]=n; if(campo==='preco'){ it.precoOriginal=n; it.desconto=0; } } }
   renderCupomCadastro();
 }
 function removerCupomItem(id){ cupomItems=cupomItems.filter(x=>x.id!==id); mostrarCupom(); }
-function responderCupomEssencial(id,v){ respostasCupom[id]={...(respostasCupom[id]||{}),essencial:v}; renderCupomCadastro(); }
-function responderCupomMesmoQue(id,pid){ respostasCupom[id]={...(respostasCupom[id]||{}),...(pid?{mesmoQue:pid}:{mesmoQueNao:true})}; renderCupomCadastro(); }
-
 function renderCupomCadastro() {
   const E=TextoSeguro.escapar;
-  const prep=prepararCupom();
-  document.getElementById('cup-total').textContent=fmtBRL(totalCupom());
+  const soma=totalCupom();
+  document.getElementById('cup-total').textContent=fmtBRL(soma);
   document.getElementById('cup-items').innerHTML=cupomItems.map(item=>{
-    const p=prep.find(x=>x.cartId===item.id)||{};
-    const resp=respostasCupom[item.id]||{};
-    let extra='';
-    if(!p.produtoId&&!resp.mesmoQue&&!resp.mesmoQueNao){
-      const sg=Nomes.sugerirProdutos(item.nome,produtos.lista(),1)[0];
-      if(sg&&sg.motivo==='parecido')extra+=`<div style="font-size:12px;margin-top:4px">Novo nome. É o mesmo que <strong>${E(sg.produto.nome)}</strong>? <button onclick="responderCupomMesmoQue(${item.id},'${E(sg.produto.id)}')">Sim</button> <button onclick="responderCupomMesmoQue(${item.id},null)">Não</button></div>`;
-    }
-    if(p.classe===null)extra+=`<div style="margin-top:4px"><button onclick="responderCupomEssencial(${item.id},true)">Essencial</button> <button onclick="responderCupomEssencial(${item.id},false)">Supérfluo</button></div>`;
+    const bruto=round2((item.precoOriginal||item.preco)*(item.qtd||1));
+    const desc=item.desconto>0?`<div class="li-sub" style="color:#2ea86b">${fmtBRL(bruto)} − ${fmtBRL(item.desconto)} de desconto</div>`:'';
     return `<div class="li" style="flex-wrap:wrap"><div class="li-info" style="min-width:0;flex:1">
       <input value="${E(item.nome)}" style="width:100%" onchange="editarCupomItem(${item.id},'nome',this.value)">
-      <div style="display:flex;gap:6px;margin-top:4px"><input value="${String(item.preco).replace('.',',')}" inputmode="decimal" style="width:90px" onchange="editarCupomItem(${item.id},'preco',this.value)">
-      <span class="li-sub">×</span><input value="${String(item.qtd||1).replace('.',',')}" inputmode="decimal" style="width:60px" onchange="editarCupomItem(${item.id},'qtd',this.value)"></div>${extra}</div>
+      <div style="display:flex;gap:6px;margin-top:4px"><input value="${String(round2(item.preco)).replace('.',',')}" inputmode="decimal" style="width:90px" onchange="editarCupomItem(${item.id},'preco',this.value)">
+      <span class="li-sub">×</span><input value="${String(item.qtd||1).replace('.',',')}" inputmode="decimal" style="width:60px" onchange="editarCupomItem(${item.id},'qtd',this.value)"></div>${desc}</div>
       <div class="li-price">${fmtBRL(item.preco*(item.qtd||1))}</div>
       <button class="ico-btn" onclick="removerCupomItem(${item.id})"><i class="ti ti-x"></i></button></div>`;
-  }).join('');
-  const faltam=prep.filter(p=>p.classe===null).length;
+  }).join('')+(cupomTotalLido>0&&Math.abs(cupomTotalLido-soma)>0.05?`<div class="li-sub" style="color:#c0392b;margin-top:8px">A soma dos itens (${fmtBRL(soma)}) é diferente do total do cupom (${fmtBRL(cupomTotalLido)}). Confira os preços e descontos.</div>`:'');
   const sv=document.getElementById('cup-save');
-  sv.disabled=faltam>0; sv.innerHTML='<i class="ti ti-device-floppy"></i>Salvar';
+  sv.disabled=false; sv.innerHTML='<i class="ti ti-device-floppy"></i>Salvar compra';
 }
 
 async function salvarCupom() {
+  if(!cupomItems.length)return;
+  // itens que não estavam na lista: pergunta essencial ou supérfluo, um por vez (como na aba Comprar)
+  for(const p of prepararCupom()){
+    if(p.classe!==null)continue;
+    const v=await perguntarEssencial(p.nome);
+    if(v===null)return; // fechou o pop-up: não salva ainda
+    respostasCupom[p.cartId]={...(respostasCupom[p.cartId]||{}),essencial:v};
+  }
   const prep=prepararCupom();
-  if(prep.some(p=>p.classe===null)){alert('Diga se cada item novo é essencial ou supérfluo.');return;}
   const mercado=document.getElementById('cup-mercado').value.trim()||'Supermercado';
   const local=document.getElementById('cup-local').value||'mercado';
   const data=document.getElementById('cup-data').value||hojeLocal();
@@ -1580,7 +1588,11 @@ async function salvarCupom() {
   }
   await TelaProdutos.registrarLotes(paraLotes,data,local);
   atualizarDatalist();
-  sb.innerHTML='<i class="ti ti-check"></i>Salvo!';
+  cupomItems=[]; respostasCupom={}; cupomTotalLido=0;
+  document.getElementById('cup-result').style.display='none';
+  document.getElementById('cup-mercado').value='';
+  sb.disabled=false;
+  alert('Compra salva no Histórico: '+mercado+' · '+fmtBRL(total));
 }
 
 // ── CUPOM: conferir contra o caixa ───────────────────────────────────

@@ -106,5 +106,56 @@ function compararCupom(itensApp, itensCupom) {
   return { iguais, precoDiferente, soNoCupom, soNoApp, diferencaTotal: r2Gastos(totalCupom - totalApp) };
 }
 
-const _gastosApi = { valorPorPeso, lerPesoG, classificarItem, resumoCompra, gastosPorProduto, prepararItensCompra, compararCupom };
+// Número do cupom: aceita 117.77, "117,77" e "1.117,77".
+function numeroCupom(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const t = String(v === null || v === undefined ? '' : v).replace(/[R$\s]/g, '');
+  if (!t) return 0;
+  const n = parseFloat(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Resposta da leitura do cupom (lista ou objeto) -> {local, tipo, data, itens, descontoGeral, total}.
+function normalizarCupom(parsed) {
+  const obj = Array.isArray(parsed) ? { itens: parsed } : (parsed || {});
+  const lista = obj.itens || obj.items || [];
+  const itens = lista.map(i => ({
+    nome: String(i.nome || i.name || 'Item').trim() || 'Item',
+    preco: numeroCupom(i.preco !== undefined ? i.preco : i.price),
+    qtd: numeroCupom(i.qtd !== undefined ? i.qtd : (i.qty !== undefined ? i.qty : 1)) || 1,
+    desconto: Math.abs(numeroCupom(i.desconto !== undefined ? i.desconto : i.discount)),
+  })).filter(i => i.preco > 0);
+  const tipo = String(obj.tipo || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return {
+    local: String(obj.local || obj.estabelecimento || '').trim(),
+    tipo: ['mercado', 'farmacia', 'acougue', 'outro'].includes(tipo) ? tipo : '',
+    data: /^\d{4}-\d{2}-\d{2}$/.test(String(obj.data || '')) ? obj.data : '',
+    itens,
+    descontoGeral: Math.abs(numeroCupom(obj.desconto_geral !== undefined ? obj.desconto_geral : obj.descontoGeral)),
+    total: numeroCupom(obj.total),
+  };
+}
+
+// Preço pago de verdade: tira o desconto de cada item e reparte o desconto geral (sem dono) pelos itens.
+// Devolve itens com preco = preço unitário líquido, precoOriginal, desconto (item + parte do geral).
+function aplicarDescontos(itens, descontoGeral) {
+  const base = (itens || []).map(i => {
+    const bruto = (Number(i.preco) || 0) * (Number(i.qtd) || 1);
+    const desc = Math.min(bruto, Math.max(0, Number(i.desconto) || 0));
+    return { ...i, bruto, liquido: bruto - desc, descItem: desc };
+  });
+  const somaLiq = base.reduce((s, i) => s + i.liquido, 0);
+  let geral = Math.min(Math.max(0, Number(descontoGeral) || 0), somaLiq);
+  let restante = geral;
+  return base.map((i, k) => {
+    let parte = k === base.length - 1 ? restante : (somaLiq ? r2Gastos(geral * i.liquido / somaLiq) : 0);
+    parte = Math.min(parte, restante);
+    restante = r2Gastos(restante - parte);
+    const final = r2Gastos(i.liquido - parte);
+    const qtd = Number(i.qtd) || 1;
+    return { nome: i.nome, qtd, precoOriginal: Number(i.preco) || 0, desconto: r2Gastos(i.descItem + parte), preco: final / qtd };
+  });
+}
+
+const _gastosApi = { numeroCupom, normalizarCupom, aplicarDescontos, valorPorPeso, lerPesoG, classificarItem, resumoCompra, gastosPorProduto, prepararItensCompra, compararCupom };
 if (typeof module !== 'undefined') module.exports = _gastosApi; else window.Gastos = _gastosApi;
