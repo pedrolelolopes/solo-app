@@ -68,3 +68,11 @@ Motivo: se o RLS ligar antes do app novo estar no ar, o app atual para de funcio
 4. Vercel → projeto → **Deployments** → linha do branch `parte2b` → **Visit**. Teste: nota rápida (texto e voz no iPhone), uma compra com item fora da lista, um item por peso, aba Produtos, **Acabou**, Cupom (cadastrar e conferir).
 5. Só depois do seu "ok, publicar" eu faço o merge no `main` (vai para produção).
 6. Depois eu rodo `python scripts/verificar_anonimo.py` e testo com uma segunda conta; resultados em `docs/seguranca/verificacao-2b.md`.
+
+## Limpar os dados de teste (26/11 em diante)
+Apaga lista de hoje, compras (e itens), lotes, produtos, folhetos e comparativos criados de 26/11/2026 até agora. **Não** mexe em receitas, cardápio, lista permanente nem em compras anteriores a 26/11.
+1. Abra supabase.com → seu projeto → **SQL Editor** → **New query**.
+2. Abra `supabase/05a-previa-limpeza-testes.sql`, copie tudo, cole e clique **Run**. Só lê, não apaga.
+3. Cole o resultado na conversa e confirme que só aparecem os seus dados (um `owner_id`, ou dois se a Aline também testou).
+4. Só depois do meu OK: nova query com `supabase/05b-limpar-testes.sql` → **Run**. Cole o resultado (contagens apagadas, e a conferência final).
+5. Esperado: contagens parecidas com as do passo 2; na conferência, produtos 0, lotes 0, sessoes_de_teste_restantes 0.
