@@ -20,3 +20,8 @@ Marque cada item depois de testar. Dados de teste inventados; nada de dados reai
 - [ ] Comprar outro desodorante (mesmo produto) → o lote anterior fecha, "Ver compras" mostra dias e custo por dia.
 - [ ] Tocar **Acabou** em um produto → fim gravado, botão some.
 - [ ] Produto com urgência "Até amanhã" perto do fim previsto → entra na lista Hoje com selo **Sugerido**; remover com X e recarregar → não volta até nova compra.
+
+## Task 7b — Cupom: cadastrar e conferir (precisa do SQL 04 rodado)
+- [ ] **Cadastrar compra do cupom:** foto de cupom de farmácia → conferir itens (editar nome/preço/qtd), escolher Local = Farmácia, data → responder Essencial/Supérfluo nos itens novos → Salvar. Ver a compra no Histórico (com o local) e os lotes na aba Produtos.
+- [ ] **Conferir compra:** montar um carrinho com 1 preço errado de propósito, fotografar o cupom → ver "Preço diferente", "Só no cupom", "Só no app" e a diferença total; **Corrigir pelo cupom** (pede confirmação para remover). Repetir escolhendo uma compra do Histórico.
+- [ ] No iPhone: o total do carrinho fica visível ao rolar a aba Comprar (barra fixa embaixo das abas). Se cobrir algo, avisar.

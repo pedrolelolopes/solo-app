@@ -2,7 +2,7 @@
 // preparar itens da compra e conferir o cupom contra o carrinho.
 const _NomesG = typeof require !== 'undefined' ? require('./nomes.js') : window.Nomes;
 
-const r2 = n => Math.round(n * 100) / 100;
+const r2Gastos = n => Math.round(n * 100) / 100;
 
 function valorPorPeso(precoKg, pesoG) {
   if (!Number.isFinite(precoKg) || !Number.isFinite(pesoG) || precoKg <= 0 || pesoG <= 0) return null;
@@ -36,7 +36,7 @@ function resumoCompra(itens) {
     const k = ['planejado', 'esquecido_essencial', 'impulso'].includes(it.classe) ? it.classe : 'sem_classe';
     r[k] += v; r.total += v;
   }
-  for (const k of Object.keys(r)) r[k] = r2(r[k]);
+  for (const k of Object.keys(r)) r[k] = r2Gastos(r[k]);
   return r;
 }
 
@@ -51,7 +51,7 @@ function gastosPorProduto(itens) {
     mapa.set(chave, g);
   }
   return [...mapa.values()]
-    .map(g => ({ chave: g.chave, nome: g.nome, total: r2(g.total), compras: g.compras, precoMedio: r2(g.total / (g.qtd || 1)) }))
+    .map(g => ({ chave: g.chave, nome: g.nome, total: r2Gastos(g.total), compras: g.compras, precoMedio: r2Gastos(g.total / (g.qtd || 1)) }))
     .sort((a, b) => b.total - a.total);
 }
 
@@ -81,8 +81,9 @@ function prepararItensCompra(cart, produtos, hojeList, respostas) {
 
 // Cupom x carrinho. itensApp: {nome, subtotal}; itensCupom: {nome, preco, qtd} (preco = unitário).
 function compararCupom(itensApp, itensCupom) {
-  const app = (itensApp || []).map(i => ({ nome: i.nome, subtotal: Number(i.subtotal) || 0 }));
-  const cup = (itensCupom || []).map(i => ({ nome: i.nome, subtotal: r2((Number(i.preco) || 0) * (Number(i.qtd) || 1)) }));
+  const comId = i => (i.id === undefined ? {} : { id: i.id });
+  const app = (itensApp || []).map(i => ({ nome: i.nome, subtotal: Number(i.subtotal) || 0, ...comId(i) }));
+  const cup = (itensCupom || []).map(i => ({ nome: i.nome, subtotal: r2Gastos((Number(i.preco) || 0) * (Number(i.qtd) || 1)), preco: Number(i.preco) || 0, qtd: Number(i.qtd) || 1 }));
   const usados = new Set();
   const iguais = [], precoDiferente = [], soNoCupom = [];
   const comuns = (a, b) => { const A = _NomesG.palavras(a); let c = 0; _NomesG.palavras(b).forEach(w => { if (A.has(w)) c++; }); return c; };
@@ -93,16 +94,16 @@ function compararCupom(itensApp, itensCupom) {
       const n = _NomesG.normalizar(a.nome) === _NomesG.normalizar(c.nome) ? 1000 : comuns(a.nome, c.nome);
       if (n > nota) { nota = n; melhor = i; }
     });
-    if (melhor < 0) { soNoCupom.push({ nome: c.nome, subtotal: c.subtotal }); continue; }
+    if (melhor < 0) { soNoCupom.push({ ...c }); continue; }
     usados.add(melhor);
     const a = app[melhor];
-    if (Math.abs(a.subtotal - c.subtotal) > 0.01) precoDiferente.push({ nome: a.nome, app: a.subtotal, cupom: c.subtotal });
+    if (Math.abs(a.subtotal - c.subtotal) > 0.01) precoDiferente.push({ nome: a.nome, app: a.subtotal, cupom: c.subtotal, precoCupom: c.preco, qtdCupom: c.qtd, ...comId(a) });
     else iguais.push({ nome: a.nome, subtotal: a.subtotal });
   }
   const soNoApp = app.filter((_, i) => !usados.has(i));
   const totalApp = app.reduce((s, i) => s + i.subtotal, 0);
   const totalCupom = cup.reduce((s, i) => s + i.subtotal, 0);
-  return { iguais, precoDiferente, soNoCupom, soNoApp, diferencaTotal: r2(totalCupom - totalApp) };
+  return { iguais, precoDiferente, soNoCupom, soNoApp, diferencaTotal: r2Gastos(totalCupom - totalApp) };
 }
 
 const _gastosApi = { valorPorPeso, lerPesoG, classificarItem, resumoCompra, gastosPorProduto, prepararItensCompra, compararCupom };

@@ -13,12 +13,13 @@ test('itens iguais', () => {
 });
 test('preço diferente (promoção que não valeu)', () => {
   const r = compararCupom([app('Biscoito', 5.99)], [cup('BISCOITO', 7.49)]);
-  assert.deepStrictEqual(r.precoDiferente, [{ nome: 'Biscoito', app: 5.99, cupom: 7.49 }]);
+  assert.strictEqual(r.precoDiferente.length, 1);
+  assert.deepStrictEqual([r.precoDiferente[0].nome, r.precoDiferente[0].app, r.precoDiferente[0].cupom], ['Biscoito', 5.99, 7.49]);
   assert.strictEqual(r.diferencaTotal, 1.5);
 });
 test('item só no cupom (esquecido no app)', () => {
   const r = compararCupom([app('Arroz', 20)], [cup('Arroz', 20), cup('Sabonete', 3)]);
-  assert.deepStrictEqual(r.soNoCupom, [{ nome: 'Sabonete', subtotal: 3 }]);
+  assert.deepStrictEqual(r.soNoCupom.map(x => [x.nome, x.subtotal, x.preco, x.qtd]), [['Sabonete', 3, 3, 1]]);
   assert.strictEqual(r.diferencaTotal, 3);
 });
 test('item só no app, diferença negativa', () => {
@@ -35,4 +36,10 @@ test('um item do app só casa com um do cupom', () => {
   const r = compararCupom([app('Leite', 5)], [cup('Leite A', 5), cup('Leite B', 5)]);
   assert.strictEqual(r.iguais.length + r.precoDiferente.length, 1);
   assert.strictEqual(r.soNoCupom.length, 1);
+});
+test('ids do app voltam em preço diferente e só no app', () => {
+  const r = compararCupom([{ id: 7, nome: 'Biscoito', subtotal: 5 }, { id: 8, nome: 'Sal', subtotal: 2 }], [cup('BISCOITO', 6)]);
+  assert.strictEqual(r.precoDiferente[0].id, 7);
+  assert.strictEqual(r.precoDiferente[0].precoCupom, 6);
+  assert.strictEqual(r.soNoApp[0].id, 8);
 });
