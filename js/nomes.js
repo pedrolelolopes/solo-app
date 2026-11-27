@@ -30,5 +30,5 @@ function sugerirProdutos(texto, produtos, max = 3) {
     .map(({ produto, motivo }) => ({ produto, motivo }));
 }
 
-if (typeof module !== 'undefined') module.exports = { normalizar: normalizarNome, sugerirProdutos };
-else window.Nomes = { normalizar: normalizarNome, sugerirProdutos };
+if (typeof module !== 'undefined') module.exports = { normalizar: normalizarNome, palavras: palavrasNome, sugerirProdutos };
+else window.Nomes = { normalizar: normalizarNome, palavras: palavrasNome, sugerirProdutos };

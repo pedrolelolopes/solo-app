@@ -9,7 +9,7 @@ create table if not exists public.produtos (
   nome text not null check (char_length(nome) between 1 and 80),
   chave text not null,
   apelidos text[] not null default '{}',
-  essencial boolean not null default false,
+  essencial boolean null,  -- null = ainda sem resposta (essencial ou superfluo?)
   urgencia text not null default 'sem_pressa' check (urgencia in ('amanha', 'semana', 'sem_pressa')),
   duracao_estimada_dias int null check (duracao_estimada_dias > 0),
   criado_em timestamptz not null default now(),
