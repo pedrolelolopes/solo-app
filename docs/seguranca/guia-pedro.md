@@ -39,3 +39,14 @@ Faça isto ANTES do merge.
 5. SQL `02-rls.sql` (liga a proteção). Se algo quebrar: `99-rollback.sql`.
 6. Verificar: `python scripts/verificar_anonimo.py`, isolamento entre contas e `/api/claude` sem login (401/403).
 Motivo: se o RLS ligar antes do app novo estar no ar, o app atual para de funcionar.
+
+## Parte 2a — Folhetos no banco
+1. Abra supabase.com → seu projeto.
+2. Menu esquerdo → **SQL Editor** → **New query**.
+3. Abra `supabase/03-folhetos.sql`, copie tudo, cole.
+4. Clique **Run**.
+5. Copie só o resultado do último `select` (tabela com `folhetos` e `comparativos`) e cole na conversa.
+6. Esperado: as duas com `rls_ligado` = true e `politicas` = 1.
+7. Se aparecer "folhetos tem dados": pare e avise na conversa.
+8. Se der outro erro: cole a mensagem inteira na conversa.
+9. Desfazer: repita os passos 1 a 4 com `supabase/99b-rollback-folhetos.sql`.
