@@ -14,3 +14,9 @@ Marque cada item depois de testar. Dados de teste inventados; nada de dados reai
 - [ ] Item por peso grava `preco_kg` e `peso_g` (ver no Histórico: "634 g · R$ 18,00/kg").
 - [ ] Histórico mostra o resumo por classe, etiquetas por item e o local (Farmácia etc.).
 - [ ] "Leite 0" novo com "Leite sem lactose" já cadastrado: pergunta "É o mesmo que…?".
+
+## Task 9 — Aba Produtos, lotes e sugeridos (precisa do SQL 04 rodado)
+- [ ] Comprar "Desodorante X" (R$ 24); na aba Produtos escolher estimativa de 45 dias → aparece "Acaba em ~45 dias" e custo por dia.
+- [ ] Comprar outro desodorante (mesmo produto) → o lote anterior fecha, "Ver compras" mostra dias e custo por dia.
+- [ ] Tocar **Acabou** em um produto → fim gravado, botão some.
+- [ ] Produto com urgência "Até amanhã" perto do fim previsto → entra na lista Hoje com selo **Sugerido**; remover com X e recarregar → não volta até nova compra.

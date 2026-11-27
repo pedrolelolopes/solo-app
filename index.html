@@ -113,6 +113,7 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
   <button class="tab-btn" onclick="showTab('comparar',this)"><i class="ti ti-scale"></i>Comparar</button>
   <button class="tab-btn" onclick="showTab('folhetos',this)"><i class="ti ti-file-description"></i>Folhetos</button>
   <button class="tab-btn" onclick="showTab('lista',this)"><i class="ti ti-clipboard-list"></i>Lista</button>
+  <button class="tab-btn" onclick="showTab('produtos',this)"><i class="ti ti-box"></i>Produtos</button>
   <button class="tab-btn" onclick="showTab('cupom',this)"><i class="ti ti-camera"></i>Cupom</button>
   <button class="tab-btn" onclick="showTab('cardapio',this)"><i class="ti ti-calendar-week"></i>Cardápio</button>
   <button class="tab-btn" onclick="showTab('historico',this)"><i class="ti ti-receipt"></i>Histórico</button>
@@ -320,6 +321,12 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
     </button>
   </div>
   <div id="fol-result"></div>
+</div>
+
+<!-- ══ PRODUTOS ═══════════════════════════════════════════════════════ -->
+<div id="s-produtos" class="screen">
+  <p style="font-size:12px;color:#8e8e93;padding:8px 0 12px">Quanto dura cada produto e quanto custa por dia</p>
+  <div id="produtos-lista"></div>
 </div>
 
 <!-- ══ LISTA ══════════════════════════════════════════════════════════ -->
@@ -586,6 +593,8 @@ input:focus,select:focus{border-color:#FB5C32;background:#fff}
 <script src="js/produtos.js"></script>
 <script src="js/voz-lista.js"></script>
 <script src="js/gastos.js"></script>
+<script src="js/lotes.js"></script>
+<script src="js/tela-produtos.js"></script>
 <script src="js/tela-lista-rapida.js"></script>
 <script>
 // ── CONFIG / LOGIN / BANCO (módulos em js/) ───────────────────────────
@@ -684,9 +693,20 @@ let sessaoMercado='';
 
 // ── INIT ─────────────────────────────────────────────────────────────
 async function init() {
-  await Promise.all([loadLista(), loadHoje(), produtos.carregar()]);
+  await Promise.all([loadLista(), loadHoje(), produtos.carregar(), TelaProdutos.carregar()]);
   atualizarDatalist();
+  await criarSugeridos();
   renderQueue(); renderHoje(); renderFixos(); updateTotal();
+}
+
+// Produtos que devem acabar em breve entram na lista Hoje como "sugerido" (sem duplicar).
+async function criarSugeridos() {
+  const pendentes = new Set(hojeList.filter(i => !i.done && i.produto_id).map(i => i.produto_id));
+  for (const p of TelaProdutos.sugeridos(pendentes)) {
+    const linha = { nome: p.nome, detalhe: 'sugerido: deve acabar em breve', done: false, produto_id: p.id, origem: 'sugerida' };
+    const salvo = await dbPost('lista_hoje', linha);
+    if (salvo) hojeList.push(salvo);
+  }
 }
 
 async function loadLista() {
@@ -710,6 +730,7 @@ function showTab(id,el) {
   if(id==='lista'){renderHoje();renderFixos();}
   if(id==='historico')renderHistorico();
   if(id==='folhetos')TelaFolhetos.abrir();
+  if(id==='produtos')TelaProdutos.render();
   if(id==='cardapio'){renderSemana();renderReceitas();}
 }
 function showSubtab(id,el) {
@@ -1024,6 +1045,7 @@ async function confirmarCompra() {
   const sessao = await dbPost('sessoes_compra', { mercado, data: dataCompra, total, local_tipo: local });
 
   if (sessao) {
+    const paraLotes = [];
     for (const item of comprados) {
       const p = prep.find(x => x.cartId === item.id);
       const resp = respostasCompra[item.id] || {};
@@ -1032,8 +1054,9 @@ async function confirmarCompra() {
       if (prod && typeof resp.essencial === 'boolean' && prod.essencial !== resp.essencial) await produtos.marcar(prod.id, { essencial: resp.essencial });
       await dbPost('itens_compra', { sessao_id: sessao.id, nome: item.nome, marca: item.marca || '', tamanho: item.tamanho || '', unidade: item.unidade || '', preco: item.preco, qtd: item.qtd, subtotal: item.subtotal,
         produto_id: prod ? prod.id : null, classe: p.classe, preco_kg: item.precoKg || null, peso_g: item.pesoG || null });
+      if (prod) paraLotes.push({ produtoId: prod.id, preco: item.subtotal, qtd: item.qtd });
     }
-    // lotes: Task 9
+    await TelaProdutos.registrarLotes(paraLotes, dataCompra, local);
 
     // Itens não comprados voltam para lista de hoje
     for (const item of naoComprados) {
@@ -1121,6 +1144,11 @@ const vozNota = (() => {
     parar() { if (rec) rec.stop(); }
   };
 })();
+const hojeLocal = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const TelaProdutos = createTelaProdutos({
+  db: { dbGet, dbPost, dbPatch, dbDel }, produtos, doc: document, hoje: hojeLocal,
+  avisar: m => alert(m), storage: localStorage
+});
 const TelaListaRapida = createTelaListaRapida({
   db: { dbGet, dbPost, dbPatch, dbDel }, produtos, doc: document, voz: vozNota,
   getHoje: () => hojeList,
@@ -1191,6 +1219,8 @@ async function toggleHoje(id) {
   if(!String(id).startsWith('tmp-'))await dbPatch('lista_hoje',id,{done:item.done});
 }
 async function rmHoje(id) {
+  const rm=hojeList.find(i=>i.id===id);
+  if(rm&&rm.origem==='sugerida'&&rm.produto_id)TelaProdutos.dispensarSugerido(rm.produto_id);
   hojeList=hojeList.filter(i=>i.id!==id);
   renderHoje(); renderQueue();
   if(!String(id).startsWith('tmp-'))await dbDel('lista_hoje',id);
@@ -1215,8 +1245,8 @@ function renderHoje() {
     <div class="check-li" style="opacity:${item.done?.6:1}">
       <div class="chkbox ${item.done?'done':''}" onclick="toggleHoje('${item.id}')">${item.done?'✓':''}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:500;text-decoration:${item.done?'line-through':'none'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.nome}</div>
-        ${item.detalhe?`<div class="li-sub">${item.detalhe}</div>`:''}
+        <div style="font-size:14px;font-weight:500;text-decoration:${item.done?'line-through':'none'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${TextoSeguro.escapar(item.nome)}${item.origem==='sugerida'?' <span class="tag tag-o">Sugerido</span>':''}</div>
+        ${item.detalhe?`<div class="li-sub">${TextoSeguro.escapar(item.detalhe)}</div>`:''}
       </div>
       <button class="ico-btn" onclick="rmHoje('${item.id}')"><i class="ti ti-x"></i></button>
     </div>`).join('')+'</div>';
