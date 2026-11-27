@@ -1664,6 +1664,110 @@ async function renderHistorico() {
       </div>
     </div>`).join('');
 }
+// ── HISTÓRICO: editar ou apagar uma compra salva ─────────────────────
+let histCache=null, edCompra=null;
+const LOCAIS_PADRAO=['mercado','farmacia','acougue','outro'];
+
+function editarCompra() {
+  if(!histCache)return;
+  const {h,itens}=histCache;
+  // item por peso vira "valor total" na edição (preço = valor, qtd = 1)
+  const norm=i=>i.peso_g?{id:i.id,nome:i.nome,preco:Number(i.subtotal||i.preco)||0,qtd:1,subtotal:Number(i.subtotal||i.preco)||0,produto_id:i.produto_id||null,peso:true}
+    :{id:i.id,nome:i.nome,preco:Number(i.preco)||0,qtd:Number(i.qtd)||1,subtotal:Number(i.subtotal||i.preco)||0,produto_id:i.produto_id||null};
+  edCompra={id:h.id,mercado:h.mercado||'',data:h.data,local_tipo:h.local_tipo||'mercado',dataAntiga:h.data,orig:itens.map(norm),itens:itens.map(norm).map(i=>({...i}))};
+  renderEdicao();
+}
+function edCampo(c,v){ edCompra[c]=v; }
+function edItem(i,campo,v){
+  const it=edCompra.itens[i]; if(!it)return;
+  if(campo==='nome')it.nome=String(v);
+  else { const n=Gastos.numeroCupom(v); if(n>0)it[campo]=n; }
+  renderEdicao();
+}
+function edRemover(i){ edCompra.itens.splice(i,1); renderEdicao(); }
+function edAdd(){ edCompra.itens.push({id:null,nome:'',preco:0,qtd:1}); renderEdicao(); }
+function edCancelar(){ const id=edCompra&&edCompra.id; edCompra=null; verCompra(id); }
+
+function renderEdicao() {
+  const E=TextoSeguro.escapar, c=edCompra, hd=document.getElementById('hist-detail');
+  const total=Gastos.diffItens(c.orig,c.itens).total;
+  const opcoes=[...LOCAIS_PADRAO,...(LOCAIS_PADRAO.includes(c.local_tipo)?[]:[c.local_tipo])];
+  hd.innerHTML=`
+    <button class="back-btn" onclick="edCancelar()"><i class="ti ti-arrow-left"></i>Cancelar</button>
+    <div class="card">
+      <div class="field"><label>Nome do lugar</label><input value="${E(c.mercado)}" onchange="edCampo('mercado',this.value)"></div>
+      <div class="g2">
+        <div class="field"><label>Data</label><input type="date" value="${E(c.data)}" onchange="edCampo('data',this.value)"></div>
+        <div class="field"><label>Local</label><select onchange="edCampo('local_tipo',this.value)">${opcoes.map(o=>`<option value="${E(o)}"${o===c.local_tipo?' selected':''}>${E(LOCAIS_NOME[o]||o)}</option>`).join('')}</select></div>
+      </div>
+    </div>
+    <div class="card">
+      ${c.itens.map((it,i)=>`
+        <div class="li" style="flex-wrap:wrap">
+          <div class="li-info" style="min-width:0;flex:1">
+            <input value="${E(it.nome)}" placeholder="Nome" style="width:100%" onchange="edItem(${i},'nome',this.value)">
+            <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
+              <input value="${it.preco?String(round2(it.preco)).replace('.',','):''}" placeholder="${it.peso?'Valor total':'Preço'}" inputmode="decimal" style="width:100px" onchange="edItem(${i},'preco',this.value)">
+              ${it.peso?'<span class="li-sub">por peso</span>':`<span class="li-sub">×</span><input value="${String(it.qtd).replace('.',',')}" inputmode="decimal" style="width:60px" onchange="edItem(${i},'qtd',this.value)">`}
+            </div>
+          </div>
+          <div class="li-price">${fmtBRL((Number(it.preco)||0)*(Number(it.qtd)||1))}</div>
+          <button class="ico-btn" onclick="edRemover(${i})" aria-label="Remover item"><i class="ti ti-x"></i></button>
+        </div>`).join('')}
+      <button class="btn btn-s btn-sm btn-bl" style="margin-top:8px" onclick="edAdd()"><i class="ti ti-plus"></i>Adicionar item</button>
+      <hr class="sep">
+      <div style="display:flex;justify-content:space-between;font-weight:600;font-size:16px"><span>Total</span><span style="color:#FB5C32">${fmtBRL(total)}</span></div>
+    </div>
+    <button class="btn btn-p btn-bl" onclick="edSalvar()"><i class="ti ti-device-floppy"></i>Salvar alterações</button>
+    <button class="btn btn-s btn-sm btn-bl" style="margin-top:10px;color:#ff3b30" onclick="edApagar()"><i class="ti ti-trash"></i>Apagar compra</button>`;
+}
+
+async function edSalvar() {
+  const c=edCompra; if(!c)return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(c.data)){alert('Data inválida.');return;}
+  const d=Gastos.diffItens(c.orig,c.itens);
+  if(!d.adicionar.length&&!c.itens.some(i=>i.id)){alert('A compra ficou sem itens. Use Apagar compra.');return;}
+  const dataMudou=c.data!==c.dataAntiga;
+  const novosCampos=a=>{ const o=c.orig.find(x=>String(x.id)===String(a.id)); return o&&o.peso?{...a.campos,preco_kg:null,peso_g:null}:a.campos; };
+  for(const a of d.alterar){
+    await dbPatch('itens_compra',a.id,novosCampos(a));
+    if(a.antes.produto_id)await TelaProdutos.ajustarLote(a.antes.produto_id,c.dataAntiga,a.antes.subtotal,{data:c.data,preco:a.campos.subtotal,qtd:a.campos.qtd});
+  }
+  for(const id of d.remover){
+    const o=c.orig.find(x=>String(x.id)===String(id));
+    await dbDel('itens_compra',id);
+    if(o&&o.produto_id)await TelaProdutos.removerLote(o.produto_id,c.dataAntiga,o.subtotal);
+  }
+  if(dataMudou){ // itens que não mudaram de preço mas mudaram de dia: o lote acompanha
+    for(const o of c.orig){
+      if(!o.produto_id||d.remover.includes(o.id)||d.alterar.some(a=>String(a.id)===String(o.id)))continue;
+      await TelaProdutos.ajustarLote(o.produto_id,c.dataAntiga,o.subtotal,{data:c.data,preco:o.subtotal,qtd:o.qtd});
+    }
+  }
+  for(const n of d.adicionar){
+    const prod=await produtos.garantir(n.nome);
+    await dbPost('itens_compra',{sessao_id:c.id,nome:n.nome,preco:n.preco,qtd:n.qtd,subtotal:n.subtotal,produto_id:prod?prod.id:null});
+    if(prod)await TelaProdutos.registrarLotes([{produtoId:prod.id,preco:n.subtotal,qtd:n.qtd}],c.data,c.local_tipo);
+  }
+  const ok=await dbPatch('sessoes_compra',c.id,{mercado:c.mercado.trim()||'Supermercado',data:c.data,local_tipo:c.local_tipo,total:d.total});
+  if(!ok){alert('Não consegui salvar o cabeçalho da compra. Tente de novo.');return;}
+  atualizarDatalist();
+  edCompra=null;
+  await verCompra(c.id);
+}
+
+async function edApagar() {
+  const c=edCompra; if(!c)return;
+  if(!confirm('Apagar esta compra e todos os itens dela? Não tem volta.'))return;
+  for(const o of c.orig){
+    if(o.produto_id)await TelaProdutos.removerLote(o.produto_id,c.dataAntiga,o.subtotal);
+    await dbDel('itens_compra',o.id);
+  }
+  await dbDel('sessoes_compra',c.id);
+  edCompra=null; histCache=null;
+  renderHistorico();
+}
+
 async function verCompra(id) {
   document.getElementById('hist-list').style.display='none';
   const hd=document.getElementById('hist-detail');
@@ -1674,8 +1778,12 @@ async function verCompra(id) {
     dbGet('itens_compra',`sessao_id=eq.${id}&select=*&order=created_at.asc`)
   ]);
   const h=ss[0]; if(!h)return;
+  histCache={h,itens};
   hd.innerHTML=`
-    <button class="back-btn" onclick="renderHistorico()"><i class="ti ti-arrow-left"></i>Voltar</button>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <button class="back-btn" onclick="renderHistorico()"><i class="ti ti-arrow-left"></i>Voltar</button>
+      <button class="btn btn-s btn-sm" onclick="editarCompra()"><i class="ti ti-pencil"></i>Editar</button>
+    </div>
     <div style="margin-bottom:14px">
       <div style="font-size:18px;font-weight:600">${TextoSeguro.escapar(h.mercado||'Supermercado')}</div>
       <div class="li-sub">${new Date(h.data+'T12:00:00').toLocaleDateString('pt-BR')} · ${itens.length} itens</div>

@@ -45,6 +45,25 @@ function createTelaProdutos({ db, produtos, doc, hoje, avisar, storage }) {
     }
   }
 
+  // Compra editada no Histórico: acha o lote dessa compra (mesmo produto, data e preço) e acompanha a edição.
+  const achaLote = (produtoId, data, preco) => lotes.find(l => l.produto_id === produtoId && String(l.comprado_em).slice(0, 10) === data
+    && Math.abs(Number(l.preco_total) - Number(preco)) < 0.01);
+  async function ajustarLote(produtoId, dataAntiga, precoAntigo, novo) { // novo: {data, preco, qtd}
+    const l = achaLote(produtoId, dataAntiga, precoAntigo);
+    if (!l) return false;
+    const campos = { comprado_em: novo.data, inicio: novo.data, preco_total: novo.preco, qtd: novo.qtd };
+    await db.dbPatch('lotes', l.id, campos);
+    Object.assign(l, campos);
+    return true;
+  }
+  async function removerLote(produtoId, data, preco) {
+    const l = achaLote(produtoId, data, preco);
+    if (!l) return false;
+    await db.dbDel('lotes', l.id);
+    lotes = lotes.filter(x => x !== l);
+    return true;
+  }
+
   async function acabou(produtoId) {
     const aberto = _Lt.abertoDe(lotes, produtoId);
     if (!aberto) { avisar('Esse produto não tem compra em uso.'); return; }
@@ -128,7 +147,7 @@ function createTelaProdutos({ db, produtos, doc, hoje, avisar, storage }) {
       : '<div class="empty"><i class="ti ti-box"></i><p>Nenhum produto ainda. Eles aparecem quando você anota ou compra.</p></div>';
   }
 
-  return { carregar, render, registrarLotes, acabou, marcar, estimativa, sugeridos, dispensarSugerido, verCompras, temAberto };
+  return { carregar, render, registrarLotes, ajustarLote, removerLote, acabou, marcar, estimativa, sugeridos, dispensarSugerido, verCompras, temAberto };
 }
 
 if (typeof module !== 'undefined') module.exports = { createTelaProdutos };
